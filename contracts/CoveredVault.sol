@@ -2,5 +2,7 @@
 pragma solidity 0.8.17;
 
 contract CoveredVault {
-  constructor() {}
+  constructor() {
+    // solhint-disable-previous-line no-empty-blocks
+  }
 }
