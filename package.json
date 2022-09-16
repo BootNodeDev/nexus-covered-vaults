@@ -2,6 +2,7 @@
   "name": "nexus-covered-vaults",
   "version": "1.0.0",
   "repository": "https://github.com/BootNodeDev/nexus-covered-vaults.git",
+  "license": "UNLICENSED",
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
@@ -12,6 +13,9 @@
     "lint:ts": "eslint --config ./.eslintrc.yaml --ignore-path ./.eslintignore --ext .js,.ts .",
     "prettier": "prettier --config .prettierrc --write \"**/*.{js,json,md,sol,ts}\"",
     "prettier:check": "prettier --config .prettierrc --list-different \"**/*.{js,sol,ts}\""
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "4.8.0-rc.0"
   },
   "devDependencies": {
     "@ethersproject/abi": "^5.4.7",
