@@ -27,4 +27,11 @@ contract CoveredVault is ERC4626 {
   ) ERC4626(IERC20(_underlyingVault.asset())) ERC20(_name, _symbol) {
     underlyingVault = _underlyingVault;
   }
+
+  /** @dev See {IERC4626-totalAssets}. */
+  function totalAssets() public view virtual override returns (uint256) {
+    uint256 underlyingShares = underlyingVault.balanceOf(address(this));
+    uint256 underlyingAssets = underlyingVault.convertToAssets(underlyingShares);
+    return underlyingAssets + super.totalAssets();
+  }
 }
