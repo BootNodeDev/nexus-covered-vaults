@@ -34,44 +34,44 @@ contract CoveredVault is ERC4626 {
   }
 
   function deposit(
-    uint256 assets,
-    address receiver,
-    uint256 minShares
+    uint256 _assets,
+    address _receiver,
+    uint256 _minShares
   ) external virtual returns (uint256) {
-    uint256 shares = deposit(assets, receiver);
-    if (shares < minShares) revert CoveredVault__DepositSlippage();
+    uint256 shares = deposit(_assets, _receiver);
+    if (shares < _minShares) revert CoveredVault__DepositSlippage();
     return shares;
   }
 
   function mint(
-    uint256 shares,
-    address receiver,
-    uint256 maxAssets
+    uint256 _shares,
+    address _receiver,
+    uint256 _maxAssets
   ) public virtual returns (uint256) {
-    uint256 assets = mint(shares, receiver);
-    if (assets > maxAssets) revert CoveredVault__MintSlippage();
+    uint256 assets = mint(_shares, _receiver);
+    if (assets > _maxAssets) revert CoveredVault__MintSlippage();
     return assets;
   }
 
   function withdraw(
-    uint256 assets,
-    address receiver,
-    address owner,
-    uint256 maxShares
+    uint256 _assets,
+    address _receiver,
+    address _owner,
+    uint256 _maxShares
   ) public virtual returns (uint256) {
-    uint256 shares = withdraw(assets, receiver, owner);
-    if (shares > maxShares) revert CoveredVault__WithdrawSlippage();
+    uint256 shares = withdraw(_assets, _receiver, _owner);
+    if (shares > _maxShares) revert CoveredVault__WithdrawSlippage();
     return shares;
   }
 
   function redeem(
-    uint256 shares,
-    address receiver,
-    address owner,
-    uint256 minAssets
+    uint256 _shares,
+    address _receiver,
+    address _owner,
+    uint256 _minAssets
   ) public virtual returns (uint256) {
-    uint256 assets = redeem(shares, receiver, owner);
-    if (assets < minAssets) revert CoveredVault__RedeemSlippage();
+    uint256 assets = redeem(_shares, _receiver, _owner);
+    if (assets < _minAssets) revert CoveredVault__RedeemSlippage();
     return assets;
   }
 }
