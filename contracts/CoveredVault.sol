@@ -33,6 +33,12 @@ contract CoveredVault is ERC4626 {
     underlyingVault = _underlyingVault;
   }
 
+  /**
+   * @dev Overloaded version of ERC-4626’s deposit. Reverts if depositing _assets mints less than _minShares shares
+   * @param _assets Amount of assets to deposit
+   * @param _receiver Account that receives the minted shares
+   * @param _minShares Minimum amount of shares to receive
+   */
   function deposit(
     uint256 _assets,
     address _receiver,
@@ -43,6 +49,12 @@ contract CoveredVault is ERC4626 {
     return shares;
   }
 
+  /**
+   * @dev Overloaded version of ERC-4626’s mint. Reverts if to mint _shares more than _maxAssets assets are deposited
+   * @param _shares Amount of shares to mint
+   * @param _receiver Account that receives the minted shares
+   * @param _maxAssets Maximum amount of assets to deposit
+   */
   function mint(
     uint256 _shares,
     address _receiver,
@@ -53,6 +65,13 @@ contract CoveredVault is ERC4626 {
     return assets;
   }
 
+  /**
+   * @dev Overloaded version of ERC-4626’s withdraw. Reverts if to withdraw _assets more than _maxShares shares are burned
+   * @param _assets Amount of assets to withdraw
+   * @param _receiver Account that receives the withdrawed assets
+   * @param _owner Account from where shares are burned
+   * @param _maxShares Maximum amount of shares to burn
+   */
   function withdraw(
     uint256 _assets,
     address _receiver,
@@ -64,6 +83,13 @@ contract CoveredVault is ERC4626 {
     return shares;
   }
 
+  /**
+   * @dev Overloaded version of ERC-4626’s redeem. Reverts if redeemed assets are less than _minAssets
+   * @param _shares Amount of shares to burn
+   * @param _receiver Account that receives the redeemed assets
+   * @param _owner Account from where shares are burned
+   * @param _minAssets Minimum amount of assets to receive
+   */
   function redeem(
     uint256 _shares,
     address _receiver,
