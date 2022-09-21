@@ -39,18 +39,21 @@ describe("CoveredVault", function () {
   describe("ERC-5143", function () {
     it("Should not revert on deposit with shares = assets the first time", async function () {
       const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
-      const amount = "100000";
+      const amount = ethers.BigNumber.from("100000");
 
       const [addr0] = await ethers.getSigners();
+      const originalUserShares = await vault.balanceOf(addr0.address);
+
       await underlyingAsset.mint(addr0.address, amount);
+      const originalUserAssets = await underlyingAsset.balanceOf(addr0.address);
 
       await underlyingAsset.approve(vault.address, amount);
       expect(await underlyingAsset.balanceOf(addr0.address)).to.equal(amount);
 
-      await vault.connect(addr0)["deposit(uint256,address,uint256)"](amount, addr0.address, "100000");
+      await vault.connect(addr0)["deposit(uint256,address,uint256)"](amount, addr0.address, amount);
 
-      expect(await vault.balanceOf(addr0.address)).to.equal(amount);
-      expect(await underlyingAsset.balanceOf(addr0.address)).to.equal("0");
+      expect(await vault.balanceOf(addr0.address)).to.equal(originalUserShares.add(amount));
+      expect(await underlyingAsset.balanceOf(addr0.address)).to.equal(originalUserAssets.sub(amount));
     });
 
     it("Should revert on deposit with shares < minShares", async function () {
@@ -69,13 +72,19 @@ describe("CoveredVault", function () {
 
     it("Should not revert on mint with assets = shares the first time", async function () {
       const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
-      const amount = "100000";
+      const amount = ethers.BigNumber.from("100000");
 
       const [addr0] = await ethers.getSigners();
+      const originalUserShares = await vault.balanceOf(addr0.address);
+
       await underlyingAsset.mint(addr0.address, amount);
+      const originalUserAssets = await underlyingAsset.balanceOf(addr0.address);
 
       await underlyingAsset.approve(vault.address, amount);
       await vault.connect(addr0)["mint(uint256,address,uint256)"](amount, addr0.address, amount);
+
+      expect(await vault.balanceOf(addr0.address)).to.equal(originalUserShares.add(amount));
+      expect(await underlyingAsset.balanceOf(addr0.address)).to.equal(originalUserAssets.sub(amount));
     });
 
     it("Should revert on mint with assets > maxShares", async function () {
@@ -93,16 +102,22 @@ describe("CoveredVault", function () {
 
     it("Should not revert on withdraw with shares = maxShares", async function () {
       const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
-      const amount = "100000";
+      const amount = ethers.BigNumber.from("100000");
 
       const [addr0] = await ethers.getSigners();
+
       await underlyingAsset.mint(addr0.address, amount);
+      const originalUserAssets = await underlyingAsset.balanceOf(addr0.address);
 
       await underlyingAsset.approve(vault.address, amount);
       await vault.connect(addr0)["mint(uint256,address,uint256)"](amount, addr0.address, amount);
+      const originalUserShares = await vault.balanceOf(addr0.address);
+
       await vault
         .connect(addr0)
         ["withdraw(uint256,address,address,uint256)"](amount, addr0.address, addr0.address, amount);
+      expect(await vault.balanceOf(addr0.address)).to.equal(originalUserShares.sub(amount));
+      expect(await underlyingAsset.balanceOf(addr0.address)).to.equal(originalUserAssets); // same amount after mint
     });
 
     it("Should revert on withdraw with shares > maxShares", async function () {
@@ -123,16 +138,23 @@ describe("CoveredVault", function () {
 
     it("Should not revert on redeem with assets = minAssets", async function () {
       const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
-      const amount = "100000";
+      const amount = ethers.BigNumber.from("100000");
 
       const [addr0] = await ethers.getSigners();
+
       await underlyingAsset.mint(addr0.address, amount);
+      const originalUserAssets = await underlyingAsset.balanceOf(addr0.address);
 
       await underlyingAsset.approve(vault.address, amount);
       await vault.connect(addr0)["mint(uint256,address,uint256)"](amount, addr0.address, amount);
+      const originalUserShares = await vault.balanceOf(addr0.address);
+
       await vault
         .connect(addr0)
         ["redeem(uint256,address,address,uint256)"](amount, addr0.address, addr0.address, amount);
+
+      expect(await vault.balanceOf(addr0.address)).to.equal(originalUserShares.sub(amount));
+      expect(await underlyingAsset.balanceOf(addr0.address)).to.equal(originalUserAssets);
     });
 
     it("Should revert on redeem with assets < minAssets", async function () {
