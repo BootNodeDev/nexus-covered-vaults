@@ -5,13 +5,14 @@ import { ERC4626 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+import { ERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
 
 /**
  * @title CoveredVault
  * @dev An ERC-4626 vault that invest the assets in an underlying ERC-4626 vault. Invested funds are protected by
  * purchasing coverage on Nexus Mutual.
  */
-contract CoveredVault is ERC4626 {
+contract CoveredVault is ERC4626, ERC20Permit {
   IERC4626 public immutable underlyingVault;
 
   error CoveredVault__DepositSlippage();
@@ -29,8 +30,13 @@ contract CoveredVault is ERC4626 {
     IERC4626 _underlyingVault,
     string memory _name,
     string memory _symbol
-  ) ERC4626(IERC20(_underlyingVault.asset())) ERC20(_name, _symbol) {
+  ) ERC4626(IERC20(_underlyingVault.asset())) ERC20(_name, _symbol) ERC20Permit(_name) {
     underlyingVault = _underlyingVault;
+  }
+
+  /** @dev See {IERC20Metadata-decimals}. */
+  function decimals() public view virtual override(ERC4626, ERC20) returns (uint8) {
+    return super.decimals();
   }
 
   /** @dev See {IERC4626-totalAssets}. */
