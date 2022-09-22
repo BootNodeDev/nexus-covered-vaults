@@ -49,7 +49,7 @@ describe("CoveredVault", function () {
 
       // Deposit assets into vault
       await underlyingAsset.connect(user1).approve(vault.address, ethers.utils.parseEther("500"));
-      await vault.connect(user1).deposit(ethers.utils.parseEther("500"), user1.address);
+      await vault.connect(user1)["deposit(uint256,address)"](ethers.utils.parseEther("500"), user1.address);
 
       expect(await vault.totalAssets()).to.equal(ethers.utils.parseEther("500"));
 
@@ -76,7 +76,7 @@ describe("CoveredVault", function () {
       // Mint assets to user and deposit
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
       await underlyingAsset.connect(user1).approve(vault.address, ethers.utils.parseEther("1000"));
-      await vault.connect(user1).deposit(ethers.utils.parseEther("1000"), user1.address);
+      await vault.connect(user1)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), user1.address);
 
       const assets = ethers.utils.parseEther("1000");
 
@@ -111,7 +111,7 @@ describe("CoveredVault", function () {
       // Mint assets to user and deposit
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
       await underlyingAsset.connect(user1).approve(vault.address, ethers.utils.parseEther("1000"));
-      await vault.connect(user1).deposit(ethers.utils.parseEther("1000"), user1.address);
+      await vault.connect(user1)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), user1.address);
 
       const shares = ethers.utils.parseEther("1000");
 
@@ -146,7 +146,7 @@ describe("CoveredVault", function () {
       // Mint assets to user and deposit
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
       await underlyingAsset.connect(user1).approve(vault.address, ethers.utils.parseEther("1000"));
-      await vault.connect(user1).deposit(ethers.utils.parseEther("1000"), user1.address);
+      await vault.connect(user1)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), user1.address);
 
       const depositAssets = ethers.utils.parseEther("1000");
 
@@ -184,13 +184,13 @@ describe("CoveredVault", function () {
       await underlyingAsset.connect(user1).approve(vault.address, ethers.utils.parseEther("1000"));
       await underlyingAsset.connect(user2).approve(vault.address, ethers.utils.parseEther("10000"));
 
-      await vault.connect(user1).deposit(ethers.utils.parseEther("1000"), user1.address);
+      await vault.connect(user1)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), user1.address);
 
       const depositAssets = ethers.utils.parseEther("1000");
 
       const initialShares = await vault.balanceOf(user2.address);
 
-      await vault.connect(user2).deposit(depositAssets, user2.address);
+      await vault.connect(user2)["deposit(uint256,address)"](depositAssets, user2.address);
 
       const firstDepositShares = await vault.balanceOf(user2.address);
 
@@ -200,7 +200,7 @@ describe("CoveredVault", function () {
       // Mint assets to vault
       await underlyingAsset.mint(vault.address, ethers.utils.parseEther("1000"));
 
-      await vault.connect(user2).deposit(depositAssets, user2.address);
+      await vault.connect(user2)["deposit(uint256,address)"](depositAssets, user2.address);
       const secondDepositShares = await vault.balanceOf(user2.address);
 
       // 1:2/3 rate
@@ -216,7 +216,7 @@ describe("CoveredVault", function () {
       await underlyingAsset.connect(user1).approve(vault.address, ethers.utils.parseEther("1000"));
       await underlyingAsset.connect(user2).approve(vault.address, ethers.utils.parseEther("10000"));
 
-      await vault.connect(user1).deposit(ethers.utils.parseEther("1000"), user1.address);
+      await vault.connect(user1)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), user1.address);
       // Deposit assets into underlying vault to the vault account
       await underlyingAsset.connect(user1).approve(underlyingVault.address, ethers.utils.parseEther("1000"));
       await underlyingVault.connect(user1).deposit(ethers.utils.parseEther("1000"), vault.address);
@@ -225,7 +225,7 @@ describe("CoveredVault", function () {
 
       const initialShares = await vault.balanceOf(user2.address);
 
-      await vault.connect(user2).deposit(depositAssets, user2.address);
+      await vault.connect(user2)["deposit(uint256,address)"](depositAssets, user2.address);
 
       const firstDepositShares = await vault.balanceOf(user2.address);
 
@@ -241,7 +241,7 @@ describe("CoveredVault", function () {
       // Mint assets to user and deposit
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
       await underlyingAsset.connect(user1).approve(vault.address, ethers.utils.parseEther("1000"));
-      await vault.connect(user1).deposit(ethers.utils.parseEther("1000"), user1.address);
+      await vault.connect(user1)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), user1.address);
 
       const mintShares = ethers.utils.parseEther("1000");
 
@@ -279,13 +279,13 @@ describe("CoveredVault", function () {
       await underlyingAsset.connect(user1).approve(vault.address, ethers.utils.parseEther("1000"));
       await underlyingAsset.connect(user2).approve(vault.address, ethers.utils.parseEther("10000"));
 
-      await vault.connect(user1).deposit(ethers.utils.parseEther("1000"), user1.address);
+      await vault.connect(user1)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), user1.address);
 
       const mintShares = ethers.utils.parseEther("1000");
 
       const initialAssets = await underlyingAsset.balanceOf(user2.address);
 
-      await vault.connect(user2).mint(mintShares, user2.address);
+      await vault.connect(user2)["mint(uint256,address)"](mintShares, user2.address);
 
       const firstDepositAssets = await underlyingAsset.balanceOf(user2.address);
 
@@ -295,7 +295,7 @@ describe("CoveredVault", function () {
       // Mint assets to vault
       await underlyingAsset.mint(vault.address, ethers.utils.parseEther("1000"));
 
-      await vault.connect(user2).mint(mintShares, user2.address);
+      await vault.connect(user2)["mint(uint256,address)"](mintShares, user2.address);
       const secondDepositAssets = await underlyingAsset.balanceOf(user2.address);
 
       // 1:3/2 rate
@@ -311,7 +311,7 @@ describe("CoveredVault", function () {
       await underlyingAsset.connect(user1).approve(vault.address, ethers.utils.parseEther("1000"));
       await underlyingAsset.connect(user2).approve(vault.address, ethers.utils.parseEther("10000"));
 
-      await vault.connect(user1).deposit(ethers.utils.parseEther("1000"), user1.address);
+      await vault.connect(user1)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), user1.address);
       // Deposit assets into underlying vault to the vault account
       await underlyingAsset.connect(user1).approve(underlyingVault.address, ethers.utils.parseEther("1000"));
       await underlyingVault.connect(user1).deposit(ethers.utils.parseEther("1000"), vault.address);
@@ -320,12 +320,148 @@ describe("CoveredVault", function () {
 
       const initialAssets = await underlyingAsset.balanceOf(user2.address);
 
-      await vault.connect(user2).mint(mintShares, user2.address);
+      await vault.connect(user2)["mint(uint256,address)"](mintShares, user2.address);
 
       const firstDepositAssets = await underlyingAsset.balanceOf(user2.address);
 
       // 1:2 rate
       expect(firstDepositAssets).to.equal(initialAssets.sub(mintShares.mul(2)));
+    });
+  });
+
+  describe("ERC-5143", function () {
+    it("Should not revert on deposit with shares = assets the first time", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const amount = ethers.BigNumber.from("100000");
+
+      const [addr0] = await ethers.getSigners();
+      const originalUserShares = await vault.balanceOf(addr0.address);
+
+      await underlyingAsset.mint(addr0.address, amount);
+      const originalUserAssets = await underlyingAsset.balanceOf(addr0.address);
+
+      await underlyingAsset.approve(vault.address, amount);
+      expect(await underlyingAsset.balanceOf(addr0.address)).to.equal(amount);
+
+      await vault.connect(addr0)["deposit(uint256,address,uint256)"](amount, addr0.address, amount);
+
+      expect(await vault.balanceOf(addr0.address)).to.equal(originalUserShares.add(amount));
+      expect(await underlyingAsset.balanceOf(addr0.address)).to.equal(originalUserAssets.sub(amount));
+    });
+
+    it("Should revert on deposit with shares < minShares", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const amount = "100000";
+
+      const [addr0] = await ethers.getSigners();
+      await underlyingAsset.mint(addr0.address, amount);
+
+      await underlyingAsset.approve(vault.address, amount);
+
+      await expect(
+        vault.connect(addr0)["deposit(uint256,address,uint256)"](amount, addr0.address, "100001"),
+      ).to.be.revertedWithCustomError(vault, "CoveredVault__DepositSlippage");
+    });
+
+    it("Should not revert on mint with assets = shares the first time", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const amount = ethers.BigNumber.from("100000");
+
+      const [addr0] = await ethers.getSigners();
+      const originalUserShares = await vault.balanceOf(addr0.address);
+
+      await underlyingAsset.mint(addr0.address, amount);
+      const originalUserAssets = await underlyingAsset.balanceOf(addr0.address);
+
+      await underlyingAsset.approve(vault.address, amount);
+      await vault.connect(addr0)["mint(uint256,address,uint256)"](amount, addr0.address, amount);
+
+      expect(await vault.balanceOf(addr0.address)).to.equal(originalUserShares.add(amount));
+      expect(await underlyingAsset.balanceOf(addr0.address)).to.equal(originalUserAssets.sub(amount));
+    });
+
+    it("Should revert on mint with assets > maxShares", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const amount = "100000";
+
+      const [addr0] = await ethers.getSigners();
+      await underlyingAsset.mint(addr0.address, amount);
+
+      await underlyingAsset.approve(vault.address, amount);
+      await expect(
+        vault.connect(addr0)["mint(uint256,address,uint256)"](amount, addr0.address, "99999"),
+      ).to.be.revertedWithCustomError(vault, "CoveredVault__MintSlippage");
+    });
+
+    it("Should not revert on withdraw with shares = maxShares", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const amount = ethers.BigNumber.from("100000");
+
+      const [addr0] = await ethers.getSigners();
+
+      await underlyingAsset.mint(addr0.address, amount);
+      const originalUserAssets = await underlyingAsset.balanceOf(addr0.address);
+
+      await underlyingAsset.approve(vault.address, amount);
+      await vault.connect(addr0)["mint(uint256,address,uint256)"](amount, addr0.address, amount);
+      const originalUserShares = await vault.balanceOf(addr0.address);
+
+      await vault
+        .connect(addr0)
+        ["withdraw(uint256,address,address,uint256)"](amount, addr0.address, addr0.address, amount);
+      expect(await vault.balanceOf(addr0.address)).to.equal(originalUserShares.sub(amount));
+      expect(await underlyingAsset.balanceOf(addr0.address)).to.equal(originalUserAssets); // same amount after mint
+    });
+
+    it("Should revert on withdraw with shares > maxShares", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const amount = "100000";
+
+      const [addr0] = await ethers.getSigners();
+      await underlyingAsset.mint(addr0.address, amount);
+
+      await underlyingAsset.approve(vault.address, amount);
+      await vault.connect(addr0)["mint(uint256,address,uint256)"](amount, addr0.address, amount);
+      await expect(
+        vault
+          .connect(addr0)
+          ["withdraw(uint256,address,address,uint256)"](amount, addr0.address, addr0.address, "99999"),
+      ).to.be.revertedWithCustomError(vault, "CoveredVault__WithdrawSlippage");
+    });
+
+    it("Should not revert on redeem with assets = minAssets", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const amount = ethers.BigNumber.from("100000");
+
+      const [addr0] = await ethers.getSigners();
+
+      await underlyingAsset.mint(addr0.address, amount);
+      const originalUserAssets = await underlyingAsset.balanceOf(addr0.address);
+
+      await underlyingAsset.approve(vault.address, amount);
+      await vault.connect(addr0)["mint(uint256,address,uint256)"](amount, addr0.address, amount);
+      const originalUserShares = await vault.balanceOf(addr0.address);
+
+      await vault
+        .connect(addr0)
+        ["redeem(uint256,address,address,uint256)"](amount, addr0.address, addr0.address, amount);
+
+      expect(await vault.balanceOf(addr0.address)).to.equal(originalUserShares.sub(amount));
+      expect(await underlyingAsset.balanceOf(addr0.address)).to.equal(originalUserAssets);
+    });
+
+    it("Should revert on redeem with assets < minAssets", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const amount = "100000";
+
+      const [addr0] = await ethers.getSigners();
+      await underlyingAsset.mint(addr0.address, amount);
+
+      await underlyingAsset.approve(vault.address, amount);
+      await vault.connect(addr0)["mint(uint256,address,uint256)"](amount, addr0.address, amount);
+      await expect(
+        vault.connect(addr0)["redeem(uint256,address,address,uint256)"](amount, addr0.address, addr0.address, "100001"),
+      ).to.be.revertedWithCustomError(vault, "CoveredVault__RedeemSlippage");
     });
   });
 });
