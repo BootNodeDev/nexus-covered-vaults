@@ -2,25 +2,16 @@ import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
+import { deployVaultFactoryFixture, deployUnderlyingVaultFixture } from "./utils/fixtures";
+
 const vaultName = "USDC Covered Vault";
 const vaultSymbol = "cvUSDC";
 
 describe("CoveredVaultFactory", function () {
-  async function deployVaultFixture() {
-    const ERC20Mock = await ethers.getContractFactory("ERC20Mock");
-    const ERC4626Mock = await ethers.getContractFactory("ERC4626Mock");
-    const CoveredVaultFactory = await ethers.getContractFactory("CoveredVaultFactory");
-
-    const underlyingAsset = await ERC20Mock.deploy("USDC", "USDC");
-    const underlyingVault = await ERC4626Mock.deploy(underlyingAsset.address, "USDC Invest Vault", "ivUSDC");
-    const vaultFactory = await CoveredVaultFactory.deploy();
-
-    return { vaultFactory, underlyingVault, underlyingAsset };
-  }
-
   describe("create", function () {
     it("Should deploy a new vault", async function () {
-      const { vaultFactory, underlyingVault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const { underlyingVault, underlyingAsset } = await loadFixture(deployUnderlyingVaultFixture);
+      const { vaultFactory } = await loadFixture(deployVaultFactoryFixture);
 
       let vaultAddress: string = "";
 

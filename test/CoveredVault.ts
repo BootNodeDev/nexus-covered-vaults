@@ -1,38 +1,12 @@
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
+import { deployVaultFixture } from "./utils/fixtures";
 
 const vaultName = "USDC Covered Vault";
 const vaultSymbol = "cvUSDC";
 
 describe("CoveredVault", function () {
-  // We define a fixture to reuse the same setup in every test.
-  // We use loadFixture to run this setup once, snapshot that state,
-  // and reset Hardhat Network to that snapshot in every test.
-  async function deployVaultFixture() {
-    const ERC20Mock = await ethers.getContractFactory("ERC20Mock");
-    const ERC4626Mock = await ethers.getContractFactory("ERC4626Mock");
-    const CoveredVault = await ethers.getContractFactory("CoveredVault");
-    const CoveredVaultFactory = await ethers.getContractFactory("CoveredVaultFactory");
-
-    const underlyingAsset = await ERC20Mock.deploy("USDC", "USDC");
-    const underlyingVault = await ERC4626Mock.deploy(underlyingAsset.address, "USDC Invest Vault", "ivUSDC");
-    const vaultFactory = await CoveredVaultFactory.deploy();
-
-    let vaultAddress: string = "";
-    await expect(vaultFactory.create(underlyingVault.address, vaultName, vaultSymbol))
-      .to.emit(vaultFactory, "CoveredVaultCreated")
-      .withArgs((createdAddress: string) => {
-        vaultAddress = createdAddress;
-        return true;
-      });
-    const vault = CoveredVault.attach(vaultAddress);
-
-    const [owner, user1, user2] = await ethers.getSigners();
-
-    return { vault, underlyingVault, underlyingAsset, owner, user1, user2 };
-  }
-
   describe("Deployment", function () {
     it("Should correctly set params", async function () {
       const { vault, underlyingVault, underlyingAsset } = await loadFixture(deployVaultFixture);
@@ -50,7 +24,8 @@ describe("CoveredVault", function () {
 
   describe("totalAssets", function () {
     it("Should account for assets in the underlying vault", async function () {
-      const { vault, underlyingVault, underlyingAsset, user1 } = await loadFixture(deployVaultFixture);
+      const { vault, underlyingVault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1] = await ethers.getSigners();
 
       expect(await vault.totalAssets()).to.equal(0);
 
@@ -81,7 +56,8 @@ describe("CoveredVault", function () {
 
   describe("convertToShares", function () {
     it("Should account for assets in the underlying vault", async function () {
-      const { vault, underlyingVault, underlyingAsset, user1 } = await loadFixture(deployVaultFixture);
+      const { vault, underlyingVault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1] = await ethers.getSigners();
 
       // Mint assets to user and deposit
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
@@ -116,7 +92,8 @@ describe("CoveredVault", function () {
 
   describe("convertToAssets", function () {
     it("Should account for assets in the underlying vault", async function () {
-      const { vault, underlyingVault, underlyingAsset, user1 } = await loadFixture(deployVaultFixture);
+      const { vault, underlyingVault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1] = await ethers.getSigners();
 
       // Mint assets to user and deposit
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
@@ -151,7 +128,8 @@ describe("CoveredVault", function () {
 
   describe("previewDeposit", function () {
     it("Should account for assets in the underlying vault", async function () {
-      const { vault, underlyingVault, underlyingAsset, user1 } = await loadFixture(deployVaultFixture);
+      const { vault, underlyingVault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1] = await ethers.getSigners();
 
       // Mint assets to user and deposit
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
@@ -186,7 +164,8 @@ describe("CoveredVault", function () {
 
   describe("deposit", function () {
     it("Should account for assets in the vault", async function () {
-      const { vault, underlyingAsset, user1, user2 } = await loadFixture(deployVaultFixture);
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, user2] = await ethers.getSigners();
 
       // Mint assets to user and deposit
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
@@ -218,7 +197,8 @@ describe("CoveredVault", function () {
     });
 
     it("Should account for assets in the underlying vault", async function () {
-      const { vault, underlyingVault, underlyingAsset, user1, user2 } = await loadFixture(deployVaultFixture);
+      const { vault, underlyingVault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, user2] = await ethers.getSigners();
 
       // Mint assets to user and deposit
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
@@ -246,7 +226,8 @@ describe("CoveredVault", function () {
 
   describe("previewMint", function () {
     it("Should account for assets in the underlying vault", async function () {
-      const { vault, underlyingVault, underlyingAsset, user1 } = await loadFixture(deployVaultFixture);
+      const { vault, underlyingVault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1] = await ethers.getSigners();
 
       // Mint assets to user and deposit
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
@@ -281,7 +262,8 @@ describe("CoveredVault", function () {
 
   describe("mint", function () {
     it("Should account for assets in the vault", async function () {
-      const { vault, underlyingAsset, user1, user2 } = await loadFixture(deployVaultFixture);
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, user2] = await ethers.getSigners();
 
       // Mint assets to user and deposit
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
@@ -313,7 +295,8 @@ describe("CoveredVault", function () {
     });
 
     it("Should account for assets in the underlying vault", async function () {
-      const { vault, underlyingVault, underlyingAsset, user1, user2 } = await loadFixture(deployVaultFixture);
+      const { vault, underlyingVault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, user2] = await ethers.getSigners();
 
       // Mint assets to user and deposit
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
