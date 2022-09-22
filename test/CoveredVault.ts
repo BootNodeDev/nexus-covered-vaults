@@ -13,10 +13,20 @@ describe("CoveredVault", function () {
     const ERC20Mock = await ethers.getContractFactory("ERC20Mock");
     const ERC4626Mock = await ethers.getContractFactory("ERC4626Mock");
     const CoveredVault = await ethers.getContractFactory("CoveredVault");
+    const CoveredVaultFactory = await ethers.getContractFactory("CoveredVaultFactory");
 
     const underlyingAsset = await ERC20Mock.deploy("USDC", "USDC");
     const underlyingVault = await ERC4626Mock.deploy(underlyingAsset.address, "USDC Invest Vault", "ivUSDC");
-    const vault = await CoveredVault.deploy(underlyingVault.address, vaultName, vaultSymbol);
+    const vaultFactory = await CoveredVaultFactory.deploy();
+
+    let vaultAddress: string = "";
+    await expect(vaultFactory.create(underlyingVault.address, vaultName, vaultSymbol))
+      .to.emit(vaultFactory, "CoveredVaultCreated")
+      .withArgs((createdAddress: string) => {
+        vaultAddress = createdAddress;
+        return true;
+      });
+    const vault = CoveredVault.attach(vaultAddress);
 
     const [owner, user1, user2] = await ethers.getSigners();
 
