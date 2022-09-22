@@ -50,7 +50,7 @@ contract CoveredVault is ERC4626 {
     uint256 _assets,
     address _receiver,
     uint256 _minShares
-  ) external virtual returns (uint256) {
+  ) external returns (uint256) {
     uint256 shares = deposit(_assets, _receiver);
     if (shares < _minShares) revert CoveredVault__DepositSlippage();
     return shares;
@@ -66,7 +66,7 @@ contract CoveredVault is ERC4626 {
     uint256 _shares,
     address _receiver,
     uint256 _maxAssets
-  ) public virtual returns (uint256) {
+  ) external returns (uint256) {
     uint256 assets = mint(_shares, _receiver);
     if (assets > _maxAssets) revert CoveredVault__MintSlippage();
     return assets;
@@ -84,7 +84,7 @@ contract CoveredVault is ERC4626 {
     address _receiver,
     address _owner,
     uint256 _maxShares
-  ) public virtual returns (uint256) {
+  ) external returns (uint256) {
     uint256 shares = withdraw(_assets, _receiver, _owner);
     if (shares > _maxShares) revert CoveredVault__WithdrawSlippage();
     return shares;
@@ -102,7 +102,7 @@ contract CoveredVault is ERC4626 {
     address _receiver,
     address _owner,
     uint256 _minAssets
-  ) public virtual returns (uint256) {
+  ) external returns (uint256) {
     uint256 assets = redeem(_shares, _receiver, _owner);
     if (assets < _minAssets) revert CoveredVault__RedeemSlippage();
     return assets;
