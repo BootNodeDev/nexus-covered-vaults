@@ -1,7 +1,9 @@
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
+import { constants } from "ethers";
 import { ethers } from "hardhat";
 import { deployVaultFixture } from "./utils/fixtures";
+import { getPermitSignature } from "./utils/getPermitSignature";
 
 const vaultName = "USDC Covered Vault";
 const vaultSymbol = "cvUSDC";
@@ -455,6 +457,20 @@ describe("CoveredVault", function () {
       await expect(
         vault.connect(addr0)["redeem(uint256,address,address,uint256)"](amount, addr0.address, addr0.address, "100001"),
       ).to.be.revertedWithCustomError(vault, "CoveredVault__RedeemSlippage");
+    });
+  });
+
+  describe("ERC20Permit", function () {
+    it("Should give allowance to spender using signature", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const value = 123;
+
+      const [wallet, spender] = await ethers.getSigners();
+      const { v, r, s } = await getPermitSignature(wallet, vault, spender.address, value);
+
+      expect(await vault.allowance(wallet.address, spender.address)).to.be.eq(0);
+      await vault.permit(wallet.address, spender.address, value, constants.MaxUint256, v, r, s);
+      expect(await vault.allowance(wallet.address, spender.address)).to.be.eq(value);
     });
   });
 });
