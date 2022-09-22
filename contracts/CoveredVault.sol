@@ -33,6 +33,13 @@ contract CoveredVault is ERC4626 {
     underlyingVault = _underlyingVault;
   }
 
+  /** @dev See {IERC4626-totalAssets}. */
+  function totalAssets() public view virtual override returns (uint256) {
+    uint256 underlyingShares = underlyingVault.balanceOf(address(this));
+    uint256 underlyingAssets = underlyingVault.convertToAssets(underlyingShares);
+    return underlyingAssets + super.totalAssets();
+  }
+
   /**
    * @dev Overloaded version of ERC-4626’s deposit. Reverts if depositing _assets mints less than _minShares shares
    * @param _assets Amount of assets to deposit
