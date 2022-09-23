@@ -17,9 +17,11 @@ export async function deployUnderlyingVaultFixture() {
 export async function deployVaultFixture() {
   const { underlyingVault, underlyingAsset } = await deployUnderlyingVaultFixture();
   const { vaultFactory } = await deployVaultFactoryFixture();
+  const [, , , admin] = await ethers.getSigners();
 
   let vaultAddress: string = "";
-  await expect(vaultFactory.create(underlyingVault.address, vaultName, vaultSymbol))
+
+  await expect(vaultFactory.create(underlyingVault.address, vaultName, vaultSymbol, admin.address))
     .to.emit(vaultFactory, "CoveredVaultCreated")
     .withArgs((createdAddress: string) => {
       vaultAddress = createdAddress;

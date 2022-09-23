@@ -473,4 +473,20 @@ describe("CoveredVault", function () {
       expect(await vault.allowance(wallet.address, spender.address)).to.be.eq(value);
     });
   });
+
+  describe("Access Control", function () {
+    it("Should give admin rights to admin passed at construction time", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+
+      const [user1, , , admin] = await ethers.getSigners();
+
+      expect(await vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), admin.address)).to.equals(true);
+      expect(await vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), user1.address)).to.equals(false);
+
+      await vault.connect(admin).grantRole(vault.BOT_ROLE(), user1.address);
+
+      expect(await vault.hasRole(vault.BOT_ROLE(), user1.address)).to.equals(true);
+      expect(await vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), user1.address)).to.equals(false);
+    });
+  });
 });

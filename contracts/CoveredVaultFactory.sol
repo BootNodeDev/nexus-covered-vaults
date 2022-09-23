@@ -16,13 +16,15 @@ contract CoveredVaultFactory {
    * @param _underlyingVault Underlying vault ERC4626-compatible contract
    * @param _name Name of the vault
    * @param _symbol Symbol of the vault
+   * @param _admin address' admin operator
    */
   function create(
     IERC4626 _underlyingVault,
     string memory _name,
-    string memory _symbol
+    string memory _symbol,
+    address _admin
   ) external returns (address) {
-    CoveredVault vault = new CoveredVault(_underlyingVault, _name, _symbol);
+    CoveredVault vault = new CoveredVault(_underlyingVault, _name, _symbol, _admin);
 
     emit CoveredVaultCreated(address(vault));
 
