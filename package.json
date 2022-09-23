@@ -12,7 +12,8 @@
     "lint:sol": "solhint --config ./.solhint.json --max-warnings 0 \"contracts/**/*.sol\"",
     "lint:ts": "eslint --config ./.eslintrc.yaml --ignore-path ./.eslintignore --ext .js,.ts .",
     "prettier": "prettier --config .prettierrc --write \"**/*.{js,json,md,sol,ts}\"",
-    "prettier:check": "prettier --config .prettierrc --list-different \"**/*.{js,sol,ts}\""
+    "prettier:check": "prettier --config .prettierrc --list-different \"**/*.{js,sol,ts}\"",
+    "size-contracts": "hardhat size-contracts"
   },
   "dependencies": {
     "@openzeppelin/contracts": "4.8.0-rc.0"
@@ -42,6 +43,7 @@
     "eslint-plugin-promise": "^6.0.1",
     "ethers": "^5.4.7",
     "hardhat": "^2.11.2",
+    "hardhat-contract-sizer": "^2.6.1",
     "hardhat-gas-reporter": "^1.0.8",
     "prettier": "^2.7.1",
     "prettier-plugin-solidity": "^1.0.0-beta.24",
