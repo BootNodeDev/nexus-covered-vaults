@@ -6,13 +6,17 @@ import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { ERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
+import { AccessManager } from "./access/AccessManager.sol";
 
 /**
  * @title CoveredVault
  * @dev An ERC-4626 vault that invest the assets in an underlying ERC-4626 vault. Invested funds are protected by
  * purchasing coverage on Nexus Mutual.
  */
-contract CoveredVault is ERC4626, ERC20Permit {
+contract CoveredVault is ERC4626, ERC20Permit, AccessManager {
+  /** @dev Role for botOperator */
+  bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
+
   IERC4626 public immutable underlyingVault;
 
   error CoveredVault__DepositSlippage();
@@ -25,12 +29,14 @@ contract CoveredVault is ERC4626, ERC20Permit {
    * @param _underlyingVault Underlying vault ERC4626-compatible contract
    * @param _name Name of the vault
    * @param _symbol Symbol of the vault
+   * @param _admin address' admin operator
    */
   constructor(
     IERC4626 _underlyingVault,
     string memory _name,
-    string memory _symbol
-  ) ERC4626(IERC20(_underlyingVault.asset())) ERC20(_name, _symbol) ERC20Permit(_name) {
+    string memory _symbol,
+    address _admin
+  ) ERC4626(IERC20(_underlyingVault.asset())) ERC20(_name, _symbol) ERC20Permit(_name) AccessManager(_admin) {
     underlyingVault = _underlyingVault;
   }
 
