@@ -14,6 +14,9 @@ import { AccessManager } from "./access/AccessManager.sol";
  * purchasing coverage on Nexus Mutual.
  */
 contract CoveredVault is ERC4626, ERC20Permit, AccessManager {
+  /** @dev Role for botOperator */
+  bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
+
   IERC4626 public immutable underlyingVault;
 
   error CoveredVault__DepositSlippage();
@@ -36,9 +39,6 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager {
   ) ERC4626(IERC20(_underlyingVault.asset())) ERC20(_name, _symbol) ERC20Permit(_name) AccessManager(_admin) {
     underlyingVault = _underlyingVault;
   }
-
-  /** @dev Role for botOperator */
-  bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
 
   /** @dev See {IERC20Metadata-decimals}. */
   function decimals() public view virtual override(ERC4626, ERC20) returns (uint8) {
