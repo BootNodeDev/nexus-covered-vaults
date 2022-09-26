@@ -26,6 +26,7 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager {
    * @param _underlyingVault Underlying vault ERC4626-compatible contract
    * @param _name Name of the vault
    * @param _symbol Symbol of the vault
+   * @param _admin address' admin operator
    */
   constructor(
     IERC4626 _underlyingVault,
