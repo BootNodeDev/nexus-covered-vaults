@@ -20,6 +20,11 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
 
   IERC4626 public immutable underlyingVault;
 
+  /**
+   * @dev Emitted when assets are invested into the underlying vault
+   */
+  event Invested(uint256 amount, uint256 shares, address sender);
+
   error CoveredVault__DepositSlippage();
   error CoveredVault__MintSlippage();
   error CoveredVault__WithdrawSlippage();
@@ -56,6 +61,17 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
   /** @dev See {IERC4626-deposit}. */
   function deposit(uint256 _assets, address _receiver) public override whenNotPaused returns (uint256) {
     return super.deposit(_assets, _receiver);
+  }
+
+  /**
+   * @dev Invest idle vault assets into the underlying vault. Only operator roles can call this method.
+   * @param _amount Amount of assets to invest
+   */
+  function invest(uint256 _amount) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
+    IERC20(asset()).approve(address(underlyingVault), _amount);
+    uint256 shares = underlyingVault.deposit(_amount, address(this));
+
+    emit Invested(_amount, shares, msg.sender);
   }
 
   /**
