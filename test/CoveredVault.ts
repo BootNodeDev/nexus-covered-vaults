@@ -509,6 +509,19 @@ describe("CoveredVault", function () {
       await vault.connect(admin).invest(amount.div(2));
     });
 
+    it("Should revert if paused", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const amount = ethers.utils.parseEther("1000");
+      // Mint assets to vault
+      await underlyingAsset.mint(vault.address, amount);
+
+      await vault.connect(admin).pause();
+
+      await expect(vault.connect(admin).invest(amount)).to.revertedWith("Pausable: paused");
+    });
+
     it("Should allow to invest all idle assets into the underlying vault", async function () {
       const { vault, underlyingAsset, underlyingVault } = await loadFixture(deployVaultFixture);
       const [, , , admin] = await ethers.getSigners();

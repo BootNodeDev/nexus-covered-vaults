@@ -67,7 +67,7 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
    * @dev Invest idle vault assets into the underlying vault. Only operator roles can call this method.
    * @param _amount Amount of assets to invest
    */
-  function invest(uint256 _amount) external onlyAdminOrRole(BOT_ROLE) {
+  function invest(uint256 _amount) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
     IERC20(asset()).approve(address(underlyingVault), _amount);
     uint256 shares = underlyingVault.deposit(_amount, address(this));
 
