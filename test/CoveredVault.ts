@@ -496,7 +496,7 @@ describe("CoveredVault", function () {
       const [user1, , , admin] = await ethers.getSigners();
 
       const amount = ethers.utils.parseEther("1000");
-      // Mint assets to user and deposit
+      // Mint assets to vault
       await underlyingAsset.mint(vault.address, amount);
 
       await expect(vault.connect(user1).invest(amount.div(2))).to.be.revertedWith(
@@ -514,7 +514,7 @@ describe("CoveredVault", function () {
       const [, , , admin] = await ethers.getSigners();
 
       const amount = ethers.utils.parseEther("1000");
-      // Mint assets to user and deposit
+      // Mint assets to vault
       await underlyingAsset.mint(vault.address, amount);
 
       await expect(vault.connect(admin).invest(amount)).to.changeTokenBalances(
@@ -529,7 +529,7 @@ describe("CoveredVault", function () {
       const [, , , admin] = await ethers.getSigners();
 
       const amount = ethers.utils.parseEther("1000");
-      // Mint assets to user and deposit
+      // Mint assets to vault
       await underlyingAsset.mint(vault.address, amount);
 
       await expect(vault.connect(admin).invest(amount.div(2))).to.changeTokenBalances(
@@ -544,7 +544,7 @@ describe("CoveredVault", function () {
       const [, , , admin] = await ethers.getSigners();
 
       const amount = ethers.utils.parseEther("1000");
-      // Mint assets to user and deposit
+      // Mint assets to vault
       await underlyingAsset.mint(vault.address, amount);
 
       await expect(vault.connect(admin).invest(amount.mul(2))).to.be.revertedWith(
@@ -557,7 +557,7 @@ describe("CoveredVault", function () {
       const [, , , admin] = await ethers.getSigners();
 
       const amount = ethers.utils.parseEther("1000");
-      // Mint assets to user and deposit
+      // Mint assets to vault
       await underlyingAsset.mint(vault.address, amount);
 
       await expect(vault.connect(admin).invest(amount))
