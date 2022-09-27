@@ -6,6 +6,7 @@ import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { ERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
+import { Pausable } from "@openzeppelin/contracts/security/Pausable.sol";
 import { AccessManager } from "./access/AccessManager.sol";
 
 /**
@@ -13,7 +14,7 @@ import { AccessManager } from "./access/AccessManager.sol";
  * @dev An ERC-4626 vault that invest the assets in an underlying ERC-4626 vault. Invested funds are protected by
  * purchasing coverage on Nexus Mutual.
  */
-contract CoveredVault is ERC4626, ERC20Permit, AccessManager {
+contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
   /** @dev Role for botOperator */
   bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
 
@@ -57,6 +58,11 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager {
     return underlyingAssets + super.totalAssets();
   }
 
+  /** @dev See {IERC4626-deposit}. */
+  function deposit(uint256 _assets, address _receiver) public override whenNotPaused returns (uint256) {
+    return super.deposit(_assets, _receiver);
+  }
+
   /**
    * @dev Invest idle vault assets into the underlying vault. Only operator roles can call this method.
    * @param _amount Amount of assets to invest
@@ -84,6 +90,11 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager {
     return shares;
   }
 
+  /** @dev See {IERC4626-mint}. */
+  function mint(uint256 _shares, address _receiver) public override whenNotPaused returns (uint256) {
+    return super.mint(_shares, _receiver);
+  }
+
   /**
    * @dev Overloaded version of ERC-4626’s mint. Reverts if to mint _shares more than _maxAssets assets are deposited
    * @param _shares Amount of shares to mint
@@ -98,6 +109,15 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager {
     uint256 assets = mint(_shares, _receiver);
     if (assets > _maxAssets) revert CoveredVault__MintSlippage();
     return assets;
+  }
+
+  /** @dev See {IERC4626-withdraw}. */
+  function withdraw(
+    uint256 _assets,
+    address _receiver,
+    address _owner
+  ) public override whenNotPaused returns (uint256) {
+    return super.withdraw(_assets, _receiver, _owner);
   }
 
   /**
@@ -118,6 +138,15 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager {
     return shares;
   }
 
+  /** @dev See {IERC4626-redeem}. */
+  function redeem(
+    uint256 _shares,
+    address _receiver,
+    address _owner
+  ) public override whenNotPaused returns (uint256) {
+    return super.redeem(_shares, _receiver, _owner);
+  }
+
   /**
    * @dev Overloaded version of ERC-4626’s redeem. Reverts if redeemed assets are less than _minAssets
    * @param _shares Amount of shares to burn
@@ -134,5 +163,30 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager {
     uint256 assets = redeem(_shares, _receiver, _owner);
     if (assets < _minAssets) revert CoveredVault__RedeemSlippage();
     return assets;
+  }
+
+  /**
+   * @dev Triggers stopped state.
+   * In this state the following methods are not callable:
+   * - All user flows deposit/mint/redeem/withdraw
+   * - Operator methods that interact with the underlying vault
+   *
+   * Requirements:
+   *
+   * - The contract must not be paused.
+   */
+  function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
+    _pause();
+  }
+
+  /**
+   * @dev Returns to normal state.
+   *
+   * Requirements:
+   *
+   * - The contract must be paused.
+   */
+  function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
+    _unpause();
   }
 }
