@@ -489,4 +489,175 @@ describe("CoveredVault", function () {
       expect(await vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), user1.address)).to.equals(false);
     });
   });
+
+  describe("Pausable", function () {
+    it("Should be able to pause only by admin", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+
+      const [botUser, anyUser, , admin] = await ethers.getSigners();
+      await vault.connect(admin).grantRole(vault.BOT_ROLE(), botUser.address);
+
+      await expect(vault.connect(botUser).pause()).to.be.reverted;
+      await expect(vault.connect(anyUser).pause()).to.be.reverted;
+      await expect(vault.connect(admin).pause()).to.not.be.reverted;
+    });
+
+    it("Should be able to unpause when paused only by admin", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+
+      const [botUser, anyUser, , admin] = await ethers.getSigners();
+      await vault.connect(admin).grantRole(vault.BOT_ROLE(), botUser.address);
+      await vault.connect(admin).pause();
+
+      await expect(vault.connect(botUser).unpause()).to.be.reverted;
+      await expect(vault.connect(anyUser).unpause()).to.be.reverted;
+      await expect(vault.connect(admin).unpause()).to.not.be.reverted;
+    });
+
+    it("Should revert calls to redeem/withdraw/deposit/mint when paused", async function () {
+      const amount = "100000";
+      const pausedError = "Pausable: paused";
+
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(deployVaultFixture);
+
+      const [anyUser, , , admin] = await ethers.getSigners();
+
+      await vault.connect(admin).pause();
+
+      // Mint assets
+      await underlyingAsset.mint(anyUser.address, ethers.utils.parseEther(amount));
+      await underlyingAsset.mint(admin.address, ethers.utils.parseEther(amount));
+
+      // Approve for both vaults
+      await underlyingAsset.connect(anyUser).approve(vault.address, ethers.utils.parseEther(amount));
+      await underlyingAsset.connect(admin).approve(vault.address, ethers.utils.parseEther(amount));
+
+      await underlyingAsset.connect(anyUser).approve(underlyingVault.address, ethers.utils.parseEther(amount));
+      await underlyingAsset.connect(admin).approve(underlyingVault.address, ethers.utils.parseEther(amount));
+
+      // check underlying vault deposit fails with admin-nonAdmin when paused
+      await expect(
+        vault.connect(anyUser)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), anyUser.address),
+      ).to.be.revertedWith(pausedError);
+      await expect(
+        vault.connect(admin)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), anyUser.address),
+      ).to.be.revertedWith(pausedError);
+
+      // check vault deposit fails with admin-nonAdmin when paused
+      await expect(
+        vault
+          .connect(anyUser)
+          ["deposit(uint256,address,uint256)"](
+            ethers.utils.parseEther("1000"),
+            anyUser.address,
+            ethers.utils.parseEther("10"),
+          ),
+      ).to.be.revertedWith(pausedError);
+      await expect(
+        vault
+          .connect(admin)
+          ["deposit(uint256,address,uint256)"](
+            ethers.utils.parseEther("1000"),
+            anyUser.address,
+            ethers.utils.parseEther("10"),
+          ),
+      ).to.be.revertedWith(pausedError);
+
+      // check underlying vault mint fails with admin-nonAdmin when paused
+      await expect(
+        vault.connect(anyUser)["mint(uint256,address)"](ethers.utils.parseEther("1000"), anyUser.address),
+      ).to.be.revertedWith(pausedError);
+      await expect(
+        vault.connect(admin)["mint(uint256,address)"](ethers.utils.parseEther("1000"), anyUser.address),
+      ).to.be.revertedWith(pausedError);
+
+      // check vault mint fails with admin-nonAdmin when paused
+      await expect(
+        vault
+          .connect(anyUser)
+          ["mint(uint256,address,uint256)"](
+            ethers.utils.parseEther("1000"),
+            anyUser.address,
+            ethers.utils.parseEther("10"),
+          ),
+      ).to.be.revertedWith(pausedError);
+      await expect(
+        vault
+          .connect(admin)
+          ["mint(uint256,address,uint256)"](
+            ethers.utils.parseEther("1000"),
+            anyUser.address,
+            ethers.utils.parseEther("10"),
+          ),
+      ).to.be.revertedWith(pausedError);
+
+      // check underlying vault redeem fails with admin-nonAdmin when paused
+      await expect(
+        vault
+          .connect(anyUser)
+          ["redeem(uint256,address,address)"](ethers.utils.parseEther("1000"), anyUser.address, anyUser.address),
+      ).to.be.revertedWith(pausedError);
+      await expect(
+        vault
+          .connect(admin)
+          ["redeem(uint256,address,address)"](ethers.utils.parseEther("1000"), anyUser.address, anyUser.address),
+      ).to.be.revertedWith(pausedError);
+
+      // check vault redeem fails with admin-nonAdmin when paused
+      await expect(
+        vault
+          .connect(anyUser)
+          ["redeem(uint256,address,address,uint256)"](
+            ethers.utils.parseEther("1000"),
+            anyUser.address,
+            anyUser.address,
+            ethers.utils.parseEther("10"),
+          ),
+      ).to.be.revertedWith(pausedError);
+      await expect(
+        vault
+          .connect(admin)
+          ["redeem(uint256,address,address,uint256)"](
+            ethers.utils.parseEther("1000"),
+            anyUser.address,
+            anyUser.address,
+            ethers.utils.parseEther("10"),
+          ),
+      ).to.be.revertedWith(pausedError);
+
+      // check underlying vault withdraw fails with admin-nonAdmin when paused
+      await expect(
+        vault
+          .connect(anyUser)
+          ["withdraw(uint256,address,address)"](ethers.utils.parseEther("1000"), anyUser.address, anyUser.address),
+      ).to.be.revertedWith(pausedError);
+      await expect(
+        vault
+          .connect(admin)
+          ["withdraw(uint256,address,address)"](ethers.utils.parseEther("1000"), anyUser.address, anyUser.address),
+      ).to.be.revertedWith(pausedError);
+
+      // check vault withdraw fails with admin-nonAdmin when paused
+      await expect(
+        vault
+          .connect(anyUser)
+          ["withdraw(uint256,address,address,uint256)"](
+            ethers.utils.parseEther("1000"),
+            anyUser.address,
+            anyUser.address,
+            ethers.utils.parseEther("10"),
+          ),
+      ).to.be.revertedWith(pausedError);
+      await expect(
+        vault
+          .connect(admin)
+          ["withdraw(uint256,address,address,uint256)"](
+            ethers.utils.parseEther("1000"),
+            anyUser.address,
+            anyUser.address,
+            ethers.utils.parseEther("10"),
+          ),
+      ).to.be.revertedWith(pausedError);
+    });
+  });
 });
