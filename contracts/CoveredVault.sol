@@ -53,6 +53,15 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager {
   }
 
   /**
+   * @dev Invest idle vault assets into the underlying vault. Only operator roles can call this method.
+   * @param _amount Amount of assets to invest
+   */
+  function invest(uint256 _amount) external onlyAdminOrRole(BOT_ROLE) {
+    IERC20(asset()).approve(address(underlyingVault), _amount);
+    underlyingVault.deposit(_amount, address(this));
+  }
+
+  /**
    * @dev Overloaded version of ERC-4626’s deposit. Reverts if depositing _assets mints less than _minShares shares
    * @param _assets Amount of assets to deposit
    * @param _receiver Account that receives the minted shares

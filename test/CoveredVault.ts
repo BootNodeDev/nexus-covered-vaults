@@ -489,4 +489,67 @@ describe("CoveredVault", function () {
       expect(await vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), user1.address)).to.equals(false);
     });
   });
+
+  describe("invest", function () {
+    it("Should revert if not admin or bot", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const amount = ethers.utils.parseEther("1000");
+      // Mint assets to user and deposit
+      await underlyingAsset.mint(vault.address, amount);
+
+      await expect(vault.connect(user1).invest(amount.div(2))).to.be.revertedWith(
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${await vault.BOT_ROLE()}`,
+      );
+
+      await vault.connect(admin).grantRole(await vault.BOT_ROLE(), user1.address);
+
+      await vault.connect(user1).invest(amount.div(2));
+      await vault.connect(admin).invest(amount.div(2));
+    });
+
+    it("Should allow to invest all idle assets into the underlying vault", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const amount = ethers.utils.parseEther("1000");
+      // Mint assets to user and deposit
+      await underlyingAsset.mint(vault.address, amount);
+
+      await expect(vault.connect(admin).invest(amount)).to.changeTokenBalances(
+        underlyingAsset,
+        [vault.address, underlyingVault.address],
+        [amount.mul(-1), amount],
+      );
+    });
+
+    it("Should allow to invest some idle assets into the underlying vault", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const amount = ethers.utils.parseEther("1000");
+      // Mint assets to user and deposit
+      await underlyingAsset.mint(vault.address, amount);
+
+      await expect(vault.connect(admin).invest(amount.div(2))).to.changeTokenBalances(
+        underlyingAsset,
+        [vault.address, underlyingVault.address],
+        [amount.div(2).mul(-1), amount.div(2)],
+      );
+    });
+
+    it("Should revert if trying to invest more assets that the vault has", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const amount = ethers.utils.parseEther("1000");
+      // Mint assets to user and deposit
+      await underlyingAsset.mint(vault.address, amount);
+
+      await expect(vault.connect(admin).invest(amount.mul(2))).to.be.revertedWith(
+        "ERC20: transfer amount exceeds balance",
+      );
+    });
+  });
 });
