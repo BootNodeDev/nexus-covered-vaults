@@ -499,7 +499,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(botUser).pause()).to.be.reverted;
       await expect(vault.connect(anyUser).pause()).to.be.reverted;
-      await expect(vault.connect(admin).pause()).to.not.be.reverted;
+      await vault.connect(admin).pause();
       expect(await vault.connect(admin).paused()).to.equal(true);
     });
 
@@ -512,7 +512,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(botUser).unpause()).to.be.reverted;
       await expect(vault.connect(anyUser).unpause()).to.be.reverted;
-      await expect(await vault.connect(admin).unpause()).to.not.be.reverted;
+      await vault.connect(admin).unpause();
       expect(await vault.connect(admin).paused()).to.equal(false);
     });
 
