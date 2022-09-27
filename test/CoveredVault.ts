@@ -499,7 +499,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(botUser).pause()).to.be.reverted;
       await expect(vault.connect(anyUser).pause()).to.be.reverted;
-      await expect(vault.connect(admin).pause()).to.not.be.reverted;
+      await expect(vault.connect(admin).pause()).to.not.be.reverted.and.be.eq(true);
     });
 
     it("Should be able to unpause when paused only by admin", async function () {
@@ -511,7 +511,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(botUser).unpause()).to.be.reverted;
       await expect(vault.connect(anyUser).unpause()).to.be.reverted;
-      await expect(vault.connect(admin).unpause()).to.not.be.reverted;
+      await expect(await vault.connect(admin).unpause()).to.not.be.reverted.and.be.eq(false);
     });
 
     it("Should revert calls to redeem/withdraw/deposit/mint when paused", async function () {

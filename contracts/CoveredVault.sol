@@ -151,8 +151,9 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
 
   /**
    * @dev Triggers stopped state.
-   * In this state withdraw/mint/redeem/deposit are not callable
-   * for the covered vault or the underlying vault.
+   * In this state the following methods are not callable:
+   * - All user flows deposit/mint/redeem/withdraw
+   * - Operator methods that interact with the underlying vault
    *
    * Requirements:
    *
