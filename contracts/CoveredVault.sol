@@ -19,6 +19,11 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager {
 
   IERC4626 public immutable underlyingVault;
 
+  /**
+   * @dev Emitted when assets are invested into the underlying vault
+   */
+  event Invested(uint256 amount, uint256 shares, address sender);
+
   error CoveredVault__DepositSlippage();
   error CoveredVault__MintSlippage();
   error CoveredVault__WithdrawSlippage();
@@ -58,7 +63,9 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager {
    */
   function invest(uint256 _amount) external onlyAdminOrRole(BOT_ROLE) {
     IERC20(asset()).approve(address(underlyingVault), _amount);
-    underlyingVault.deposit(_amount, address(this));
+    uint256 shares = underlyingVault.deposit(_amount, address(this));
+
+    emit Invested(_amount, shares, msg.sender);
   }
 
   /**

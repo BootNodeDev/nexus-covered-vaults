@@ -551,5 +551,18 @@ describe("CoveredVault", function () {
         "ERC20: transfer amount exceeds balance",
       );
     });
+
+    it("Should emit an event with amount, shares and caller", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const amount = ethers.utils.parseEther("1000");
+      // Mint assets to user and deposit
+      await underlyingAsset.mint(vault.address, amount);
+
+      await expect(vault.connect(admin).invest(amount))
+        .to.emit(vault, "Invested")
+        .withArgs(amount, amount, admin.address);
+    });
   });
 });
