@@ -2,7 +2,7 @@ import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import { constants } from "ethers";
 import { ethers } from "hardhat";
-import { deployVaultFixture } from "./utils/fixtures";
+import { deployVaultFixture, mintVaultSharesFixture } from "./utils/fixtures";
 import { getPermitSignature } from "./utils/getPermitSignature";
 
 const vaultName = "USDC Covered Vault";
@@ -749,6 +749,294 @@ describe("CoveredVault", function () {
             ethers.utils.parseEther("10"),
           ),
       ).to.be.revertedWith(pausedError);
+    });
+  });
+
+  describe("redeem", function () {
+    it("Should redeem shares for underlying asset", async function () {
+      const { vault, underlyingAsset } = await loadFixture(mintVaultSharesFixture);
+      const [user1] = await ethers.getSigners();
+
+      const user1Balance = await vault.balanceOf(user1.address);
+      const redeemTx = await vault["redeem(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      await expect(redeemTx).to.changeTokenBalances(
+        underlyingAsset,
+        [user1.address, vault.address],
+        [user1Balance, user1Balance.mul(-1)],
+      );
+      await expect(redeemTx).to.changeTokenBalance(vault, user1.address, user1Balance.mul(-1));
+    });
+
+    it("Should redeem shares accounting for asset invested", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      // Invest all assets into underlying vault
+      const totalAssets = await underlyingAsset.balanceOf(vault.address);
+      await vault.connect(admin).invest(totalAssets);
+
+      const user1Balance = await vault.balanceOf(user1.address);
+      const redeemTx = await vault["redeem(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      await expect(redeemTx).to.changeTokenBalances(
+        underlyingAsset,
+        [user1.address, underlyingVault.address, vault.address],
+        [totalAssets, totalAssets.mul(-1), 0],
+      );
+      await expect(redeemTx).to.changeTokenBalance(vault, user1.address, user1Balance.mul(-1));
+    });
+
+    it("Should redeem shares accounting for generated yield", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      // Invest all assets into underlying vault
+      const totalAssets = await underlyingAsset.balanceOf(vault.address);
+      await vault.connect(admin).invest(totalAssets);
+
+      // Generate yield
+      const yieldAmount = ethers.utils.parseEther("1");
+      await underlyingAsset.mint(underlyingVault.address, yieldAmount);
+
+      const user1Balance = await vault.balanceOf(user1.address);
+      const redeemTx = await vault["redeem(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      await expect(redeemTx).to.changeTokenBalances(
+        underlyingAsset,
+        [user1.address, underlyingVault.address, vault.address],
+        [totalAssets.add(yieldAmount), totalAssets.add(yieldAmount).mul(-1), 0],
+      );
+      await expect(redeemTx).to.changeTokenBalance(vault, user1.address, user1Balance.mul(-1));
+    });
+
+    it("Should correctly distribute yield", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
+      const [user1, user2, , admin] = await ethers.getSigners();
+
+      // Invest all assets into underlying vault
+      const totalAssets = await underlyingAsset.balanceOf(vault.address);
+      await vault.connect(admin).invest(totalAssets);
+
+      // Generate yield
+      const yieldAmount = ethers.utils.parseEther("1");
+      await underlyingAsset.mint(underlyingVault.address, yieldAmount);
+
+      // User2 deposit after generated yield
+      const user2Amount = ethers.utils.parseEther("1000");
+      await vault.connect(user2)["deposit(uint256,address)"](user2Amount, user2.address);
+      await vault.connect(admin).invest(user2Amount);
+
+      const user1Balance = await vault.balanceOf(user1.address);
+      const redeemTx = await vault["redeem(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      await expect(redeemTx).to.changeTokenBalances(
+        underlyingAsset,
+        [user1.address, underlyingVault.address, vault.address],
+        [totalAssets.add(yieldAmount), totalAssets.add(yieldAmount).mul(-1), 0],
+      );
+      await expect(redeemTx).to.changeTokenBalance(vault, user1.address, user1Balance.mul(-1));
+    });
+
+    it("Should take all assets from lobby if available", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
+      const [user1, user2, , admin] = await ethers.getSigners();
+
+      // Invest all assets into underlying vault
+      const totalAssets = await underlyingAsset.balanceOf(vault.address);
+      await vault.connect(admin).invest(totalAssets);
+
+      // Generate yield
+      const yieldAmount = ethers.utils.parseEther("1");
+      await underlyingAsset.mint(underlyingVault.address, yieldAmount);
+
+      // User2 deposit after generated yield
+      const user2Amount = ethers.utils.parseEther("1000");
+      await vault.connect(user2)["deposit(uint256,address)"](user2Amount, user2.address);
+
+      const user1Balance = await vault.balanceOf(user1.address);
+      const redeemTx = await vault["redeem(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      await expect(redeemTx).to.changeTokenBalances(
+        underlyingAsset,
+        [user1.address, underlyingVault.address, vault.address],
+        [totalAssets.add(yieldAmount), yieldAmount.mul(-1), totalAssets.mul(-1)],
+      );
+      await expect(redeemTx).to.changeTokenBalance(vault, user1.address, user1Balance.mul(-1));
+    });
+
+    it("Should take partial assets from lobby if available", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
+      const [user1, user2, , admin] = await ethers.getSigners();
+
+      // Invest all assets into underlying vault
+      const totalAssets = await underlyingAsset.balanceOf(vault.address);
+      await vault.connect(admin).invest(totalAssets);
+
+      // Generate yield
+      const yieldAmount = ethers.utils.parseEther("1");
+      await underlyingAsset.mint(underlyingVault.address, yieldAmount);
+
+      // User2 deposit after generated yield
+      const user2Amount = ethers.utils.parseEther("500");
+      await vault.connect(user2)["deposit(uint256,address)"](user2Amount, user2.address);
+
+      const user1Balance = await vault.balanceOf(user1.address);
+      const redeemTx = await vault["redeem(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      await expect(redeemTx).to.changeTokenBalances(
+        underlyingAsset,
+        [user1.address, underlyingVault.address, vault.address],
+        [totalAssets.add(yieldAmount), user2Amount.add(yieldAmount).mul(-1), user2Amount.mul(-1)],
+      );
+      await expect(redeemTx).to.changeTokenBalance(vault, user1.address, user1Balance.mul(-1));
+    });
+  });
+
+  describe("withdraw", function () {
+    it("Should withdraw assets for vault shares", async function () {
+      const { vault, underlyingAsset } = await loadFixture(mintVaultSharesFixture);
+      const [user1] = await ethers.getSigners();
+
+      const user1Shares = await vault.balanceOf(user1.address);
+      const user1Balance = await vault.convertToAssets(user1Shares);
+      const withdrawTx = await vault["withdraw(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      await expect(withdrawTx).to.changeTokenBalances(
+        underlyingAsset,
+        [user1.address, vault.address],
+        [user1Balance, user1Balance.mul(-1)],
+      );
+      await expect(withdrawTx).to.changeTokenBalance(vault, user1.address, user1Balance.mul(-1));
+    });
+
+    it("Should withdraw assets accounting for asset invested", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      // Invest all assets into underlying vault
+      const totalAssets = await underlyingAsset.balanceOf(vault.address);
+      await vault.connect(admin).invest(totalAssets);
+
+      const user1Shares = await vault.balanceOf(user1.address);
+      const user1Balance = await vault.convertToAssets(user1Shares);
+      const withdrawTx = await vault["withdraw(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      await expect(withdrawTx).to.changeTokenBalances(
+        underlyingAsset,
+        [user1.address, underlyingVault.address, vault.address],
+        [totalAssets, totalAssets.mul(-1), 0],
+      );
+      await expect(withdrawTx).to.changeTokenBalance(vault, user1.address, user1Balance.mul(-1));
+    });
+
+    it("Should withdraw assets accounting for generated yield", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      // Invest all assets into underlying vault
+      const totalAssets = await underlyingAsset.balanceOf(vault.address);
+      await vault.connect(admin).invest(totalAssets);
+
+      // Generate yield
+      const yieldAmount = ethers.utils.parseEther("1");
+      await underlyingAsset.mint(underlyingVault.address, yieldAmount);
+
+      const user1Shares = await vault.balanceOf(user1.address);
+      const user1Balance = await vault.convertToAssets(user1Shares);
+      const withdrawTx = await vault["withdraw(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      await expect(withdrawTx).to.changeTokenBalances(
+        underlyingAsset,
+        [user1.address, underlyingVault.address, vault.address],
+        [totalAssets.add(yieldAmount), totalAssets.add(yieldAmount).mul(-1), 0],
+      );
+      await expect(withdrawTx).to.changeTokenBalance(vault, user1.address, user1Shares.mul(-1));
+    });
+
+    it("Should correctly distribute yield", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
+      const [user1, user2, , admin] = await ethers.getSigners();
+
+      // Invest all assets into underlying vault
+      const totalAssets = await underlyingAsset.balanceOf(vault.address);
+      await vault.connect(admin).invest(totalAssets);
+
+      // Generate yield
+      const yieldAmount = ethers.utils.parseEther("1");
+      await underlyingAsset.mint(underlyingVault.address, yieldAmount);
+
+      // User2 deposit after generated yield
+      const user2Amount = ethers.utils.parseEther("1000");
+      await vault.connect(user2)["deposit(uint256,address)"](user2Amount, user2.address);
+      await vault.connect(admin).invest(user2Amount);
+
+      const user1Shares = await vault.balanceOf(user1.address);
+      const user1Balance = await vault.convertToAssets(user1Shares);
+      const withdrawTx = await vault["withdraw(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      await expect(withdrawTx).to.changeTokenBalances(
+        underlyingAsset,
+        [user1.address, underlyingVault.address, vault.address],
+        [totalAssets.add(yieldAmount), totalAssets.add(yieldAmount).mul(-1), 0],
+      );
+      await expect(withdrawTx).to.changeTokenBalance(vault, user1.address, user1Shares.mul(-1));
+    });
+
+    it("Should take all assets from lobby if available", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
+      const [user1, user2, , admin] = await ethers.getSigners();
+
+      // Invest all assets into underlying vault
+      const totalAssets = await underlyingAsset.balanceOf(vault.address);
+      await vault.connect(admin).invest(totalAssets);
+
+      // Generate yield
+      const yieldAmount = ethers.utils.parseEther("1");
+      await underlyingAsset.mint(underlyingVault.address, yieldAmount);
+
+      // User2 deposit after generated yield
+      const user2Amount = ethers.utils.parseEther("1000");
+      await vault.connect(user2)["deposit(uint256,address)"](user2Amount, user2.address);
+
+      const user1Shares = await vault.balanceOf(user1.address);
+      const user1Balance = await vault.convertToAssets(user1Shares);
+      const withdrawTx = await vault["withdraw(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      await expect(withdrawTx).to.changeTokenBalances(
+        underlyingAsset,
+        [user1.address, underlyingVault.address, vault.address],
+        [totalAssets.add(yieldAmount), yieldAmount.mul(-1), totalAssets.mul(-1)],
+      );
+      await expect(withdrawTx).to.changeTokenBalance(vault, user1.address, user1Shares.mul(-1));
+    });
+
+    it("Should take partial assets from lobby if available", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
+      const [user1, user2, , admin] = await ethers.getSigners();
+
+      // Invest all assets into underlying vault
+      const totalAssets = await underlyingAsset.balanceOf(vault.address);
+      await vault.connect(admin).invest(totalAssets);
+
+      // Generate yield
+      const yieldAmount = ethers.utils.parseEther("1");
+      await underlyingAsset.mint(underlyingVault.address, yieldAmount);
+
+      // User2 deposit after generated yield
+      const user2Amount = ethers.utils.parseEther("500");
+      await vault.connect(user2)["deposit(uint256,address)"](user2Amount, user2.address);
+
+      const user1Shares = await vault.balanceOf(user1.address);
+      const user1Balance = await vault.convertToAssets(user1Shares);
+      const withdrawTx = await vault["withdraw(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      await expect(withdrawTx).to.changeTokenBalances(
+        underlyingAsset,
+        [user1.address, underlyingVault.address, vault.address],
+        [totalAssets.add(yieldAmount), user2Amount.add(yieldAmount).mul(-1), user2Amount.mul(-1)],
+      );
+      await expect(withdrawTx).to.changeTokenBalance(vault, user1.address, user1Shares.mul(-1));
     });
   });
 });

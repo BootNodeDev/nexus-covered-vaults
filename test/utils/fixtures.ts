@@ -40,3 +40,18 @@ export async function deployVaultFactoryFixture() {
 
   return { vaultFactory };
 }
+
+export async function mintVaultSharesFixture() {
+  const { vault, underlyingVault, underlyingAsset } = await deployVaultFixture();
+  const [user1, user2] = await ethers.getSigners();
+
+  // Mint assets to users
+  await underlyingAsset.mint(user1.address, ethers.utils.parseEther("10000"));
+  await underlyingAsset.mint(user2.address, ethers.utils.parseEther("10000"));
+  await underlyingAsset.connect(user1).approve(vault.address, ethers.utils.parseEther("10000"));
+  await underlyingAsset.connect(user2).approve(vault.address, ethers.utils.parseEther("10000"));
+
+  await vault.connect(user1)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), user1.address);
+
+  return { vault, underlyingVault, underlyingAsset };
+}
