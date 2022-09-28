@@ -24,15 +24,21 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
 
   IERC4626 public immutable underlyingVault;
 
+  /* ========== Events ========== */
+
   /**
    * @dev Emitted when assets are invested into the underlying vault
    */
   event Invested(uint256 amount, uint256 shares, address sender);
 
+  /* ========== Custom Errors ========== */
+
   error CoveredVault__DepositSlippage();
   error CoveredVault__MintSlippage();
   error CoveredVault__WithdrawSlippage();
   error CoveredVault__RedeemSlippage();
+
+  /* ========== Constructor ========== */
 
   /**
    * @dev Set the underlying vault contract, name and symbol of the vault.
@@ -49,6 +55,8 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
   ) ERC4626(IERC20(_underlyingVault.asset())) ERC20(_name, _symbol) ERC20Permit(_name) AccessManager(_admin) {
     underlyingVault = _underlyingVault;
   }
+
+  /* ========== View methods ========== */
 
   /** @dev See {IERC20Metadata-decimals}. */
   function decimals() public view override(ERC4626, ERC20) returns (uint8) {
@@ -90,20 +98,11 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
     return _convertToAssets(shares, Math.Rounding.Down, true);
   }
 
+  /* ========== User methods ========== */
+
   /** @dev See {IERC4626-deposit}. */
   function deposit(uint256 _assets, address _receiver) public override whenNotPaused returns (uint256) {
     return super.deposit(_assets, _receiver);
-  }
-
-  /**
-   * @dev Invest idle vault assets into the underlying vault. Only operator roles can call this method.
-   * @param _amount Amount of assets to invest
-   */
-  function invest(uint256 _amount) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
-    IERC20(asset()).approve(address(underlyingVault), _amount);
-    uint256 shares = underlyingVault.deposit(_amount, address(this));
-
-    emit Invested(_amount, shares, msg.sender);
   }
 
   /**
@@ -197,6 +196,46 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
     return assets;
   }
 
+  /* ========== Admin methods ========== */
+
+  /**
+   * @dev Invest idle vault assets into the underlying vault. Only operator roles can call this method.
+   * @param _amount Amount of assets to invest
+   */
+  function invest(uint256 _amount) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
+    IERC20(asset()).approve(address(underlyingVault), _amount);
+    uint256 shares = underlyingVault.deposit(_amount, address(this));
+
+    emit Invested(_amount, shares, msg.sender);
+  }
+
+  /**
+   * @dev Triggers stopped state.
+   * In this state the following methods are not callable:
+   * - All user flows deposit/mint/redeem/withdraw
+   * - Operator methods that interact with the underlying vault
+   *
+   * Requirements:
+   *
+   * - The contract must not be paused.
+   */
+  function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
+    _pause();
+  }
+
+  /**
+   * @dev Returns to normal state.
+   *
+   * Requirements:
+   *
+   * - The contract must be paused.
+   */
+  function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
+    _unpause();
+  }
+
+  /* ========== Internal methods ========== */
+
   /**
    * @dev Internal conversion function (from assets to shares) with support for rounding direction.
    *
@@ -264,30 +303,5 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
     SafeERC20.safeTransfer(IERC20(asset()), receiver, assets);
 
     emit Withdraw(caller, receiver, owner, assets, shares);
-  }
-
-  /**
-   * @dev Triggers stopped state.
-   * In this state the following methods are not callable:
-   * - All user flows deposit/mint/redeem/withdraw
-   * - Operator methods that interact with the underlying vault
-   *
-   * Requirements:
-   *
-   * - The contract must not be paused.
-   */
-  function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
-    _pause();
-  }
-
-  /**
-   * @dev Returns to normal state.
-   *
-   * Requirements:
-   *
-   * - The contract must be paused.
-   */
-  function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
-    _unpause();
   }
 }
