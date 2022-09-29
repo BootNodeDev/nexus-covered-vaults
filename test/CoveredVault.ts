@@ -21,6 +21,7 @@ describe("CoveredVault", function () {
       expect(await vault.name()).to.equal(vaultName);
       expect(await vault.symbol()).to.equal(vaultSymbol);
       expect(await vault.decimals()).to.equal(await underlyingAsset.decimals());
+      expect(await vault.maxAssetsLimit()).to.equal(ethers.constants.MaxUint256);
     });
   });
 
@@ -164,6 +165,35 @@ describe("CoveredVault", function () {
     });
   });
 
+  describe("maxDeposit", function () {
+    it("Should account for max asset limit and total assets", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      expect(await vault.maxDeposit(user1.address)).to.equal(constants.MaxUint256);
+
+      // Mint assets to user and deposit
+      const mintAmount = ethers.utils.parseEther("10000");
+      await underlyingAsset.mint(user1.address, mintAmount);
+      await underlyingAsset.connect(user1).approve(vault.address, mintAmount);
+
+      const depositAmount = ethers.utils.parseEther("1000");
+      await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
+
+      expect(await vault.maxDeposit(user1.address)).to.equal(constants.MaxUint256.sub(depositAmount));
+
+      await vault.connect(admin).invest(depositAmount);
+      await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
+      expect(await vault.maxDeposit(user1.address)).to.equal(constants.MaxUint256.sub(depositAmount.mul(2)));
+
+      await vault.connect(admin).setMaxAssetsLimit(depositAmount.mul(2));
+      expect(await vault.maxDeposit(user1.address)).to.equal(0);
+
+      await vault.connect(user1)["withdraw(uint256,address,address)"](depositAmount, user1.address, user1.address);
+      expect(await vault.maxDeposit(user1.address)).to.equal(depositAmount);
+    });
+  });
+
   describe("deposit", function () {
     it("Should account for assets in the vault", async function () {
       const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
@@ -223,6 +253,28 @@ describe("CoveredVault", function () {
 
       // 1:1/2 rate
       expect(firstDepositShares).to.equal(initialShares.add(depositAssets.div(2)));
+    });
+
+    it("Should account for max deposit", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const depositAmount = ethers.utils.parseEther("1000");
+
+      // Set max assets limit
+      await vault.connect(admin).setMaxAssetsLimit(depositAmount.mul(2));
+
+      // Mint assets to user and deposit
+      const mintAmount = ethers.utils.parseEther("10000");
+      await underlyingAsset.mint(user1.address, mintAmount);
+      await underlyingAsset.connect(user1).approve(vault.address, mintAmount);
+
+      await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
+      await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
+
+      await expect(vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address)).to.be.revertedWith(
+        "ERC4626: deposit more than max",
+      );
     });
   });
 
@@ -321,6 +373,57 @@ describe("CoveredVault", function () {
 
       // 1:2 rate
       expect(firstDepositAssets).to.equal(initialAssets.sub(mintShares.mul(2)));
+    });
+
+    it("Should account for max mint", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const depositAmount = ethers.utils.parseEther("1000");
+
+      // Set max assets limit
+      await vault.connect(admin).setMaxAssetsLimit(depositAmount.mul(2));
+
+      // Mint assets to user and deposit
+      const mintAmount = ethers.utils.parseEther("10000");
+      await underlyingAsset.mint(user1.address, mintAmount);
+      await underlyingAsset.connect(user1).approve(vault.address, mintAmount);
+
+      await vault.connect(user1)["mint(uint256,address)"](depositAmount, user1.address);
+      await vault.connect(user1)["mint(uint256,address)"](depositAmount, user1.address);
+
+      await expect(vault.connect(user1)["mint(uint256,address)"](depositAmount, user1.address)).to.be.revertedWith(
+        "ERC4626: mint more than max",
+      );
+    });
+  });
+
+  describe("maxMint", function () {
+    it("Should account for max asset limit and total assets", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      expect(await vault.maxDeposit(user1.address)).to.equal(constants.MaxUint256);
+
+      // Mint assets to user and deposit
+      const mintAmount = ethers.utils.parseEther("10000");
+      await underlyingAsset.mint(user1.address, mintAmount);
+      await underlyingAsset.connect(user1).approve(vault.address, mintAmount);
+
+      const depositAmount = ethers.utils.parseEther("1000");
+      await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
+
+      expect(await vault.maxMint(user1.address)).to.equal(constants.MaxUint256.sub(depositAmount));
+
+      await vault.connect(admin).invest(depositAmount);
+      await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
+      expect(await vault.maxMint(user1.address)).to.equal(constants.MaxUint256.sub(depositAmount.mul(2)));
+
+      await vault.connect(admin).setMaxAssetsLimit(depositAmount.mul(2));
+      expect(await vault.maxMint(user1.address)).to.equal(0);
+
+      await vault.connect(user1)["withdraw(uint256,address,address)"](depositAmount, user1.address, user1.address);
+      expect(await vault.maxMint(user1.address)).to.equal(depositAmount);
     });
   });
 
@@ -1037,6 +1140,45 @@ describe("CoveredVault", function () {
         [totalAssets.add(yieldAmount), user2Amount.add(yieldAmount).mul(-1), user2Amount.mul(-1)],
       );
       await expect(withdrawTx).to.changeTokenBalance(vault, user1.address, user1Shares.mul(-1));
+    });
+  });
+
+  describe("setMaxAssetsLimit", function () {
+    it("Should allow only admin to update maxAssetsLimit", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const adminRole = await vault.DEFAULT_ADMIN_ROLE();
+      const amount = 100;
+
+      expect(await vault.maxAssetsLimit()).to.not.equal(amount);
+      // Try with regular user
+      await expect(vault.connect(user1).setMaxAssetsLimit(amount)).to.be.revertedWith(
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${adminRole}`,
+      );
+
+      // Try with bot operator
+      await vault.connect(admin).grantRole(await vault.BOT_ROLE(), user1.address);
+
+      await expect(vault.connect(user1).setMaxAssetsLimit(amount)).to.be.revertedWith(
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${adminRole}`,
+      );
+
+      // Try with admin
+      await vault.connect(admin).setMaxAssetsLimit(amount);
+
+      expect(await vault.maxAssetsLimit()).to.equal(amount);
+    });
+
+    it("Should emit an event", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const amount = 100;
+
+      await expect(vault.connect(admin).setMaxAssetsLimit(amount))
+        .to.emit(vault, "MaxAssetsLimitUpdated")
+        .withArgs(amount);
     });
   });
 });
