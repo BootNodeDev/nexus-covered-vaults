@@ -8,6 +8,8 @@ import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { ERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
 import { Pausable } from "@openzeppelin/contracts/security/Pausable.sol";
 import { AccessManager } from "./access/AccessManager.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
  * @title CoveredVault
@@ -15,20 +17,28 @@ import { AccessManager } from "./access/AccessManager.sol";
  * purchasing coverage on Nexus Mutual.
  */
 contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
+  using Math for uint256;
+
   /** @dev Role for botOperator */
   bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
 
   IERC4626 public immutable underlyingVault;
+
+  /* ========== Events ========== */
 
   /**
    * @dev Emitted when assets are invested into the underlying vault
    */
   event Invested(uint256 amount, uint256 shares, address sender);
 
+  /* ========== Custom Errors ========== */
+
   error CoveredVault__DepositSlippage();
   error CoveredVault__MintSlippage();
   error CoveredVault__WithdrawSlippage();
   error CoveredVault__RedeemSlippage();
+
+  /* ========== Constructor ========== */
 
   /**
    * @dev Set the underlying vault contract, name and symbol of the vault.
@@ -46,32 +56,53 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
     underlyingVault = _underlyingVault;
   }
 
+  /* ========== View methods ========== */
+
   /** @dev See {IERC20Metadata-decimals}. */
-  function decimals() public view virtual override(ERC4626, ERC20) returns (uint8) {
+  function decimals() public view override(ERC4626, ERC20) returns (uint8) {
     return super.decimals();
   }
 
   /** @dev See {IERC4626-totalAssets}. */
-  function totalAssets() public view virtual override returns (uint256) {
-    uint256 underlyingShares = underlyingVault.balanceOf(address(this));
-    uint256 underlyingAssets = underlyingVault.convertToAssets(underlyingShares);
-    return underlyingAssets + super.totalAssets();
+  function totalAssets() public view override returns (uint256) {
+    return _totalAssets(false);
   }
+
+  /** @dev See {IERC4626-convertToShares}. */
+  function convertToShares(uint256 assets) public view override returns (uint256 shares) {
+    return _convertToShares(assets, Math.Rounding.Down, false);
+  }
+
+  /** @dev See {IERC4626-convertToAssets}. */
+  function convertToAssets(uint256 shares) public view override returns (uint256 assets) {
+    return _convertToAssets(shares, Math.Rounding.Down, false);
+  }
+
+  /** @dev See {IERC4626-previewDeposit}. */
+  function previewDeposit(uint256 assets) public view override returns (uint256) {
+    return _convertToShares(assets, Math.Rounding.Down, false);
+  }
+
+  /** @dev See {IERC4626-previewMint}. */
+  function previewMint(uint256 shares) public view override returns (uint256) {
+    return _convertToAssets(shares, Math.Rounding.Up, false);
+  }
+
+  /** @dev See {IERC4626-previewWithdraw}. */
+  function previewWithdraw(uint256 assets) public view override returns (uint256) {
+    return _convertToShares(assets, Math.Rounding.Up, true);
+  }
+
+  /** @dev See {IERC4626-previewRedeem}. */
+  function previewRedeem(uint256 shares) public view override returns (uint256) {
+    return _convertToAssets(shares, Math.Rounding.Down, true);
+  }
+
+  /* ========== User methods ========== */
 
   /** @dev See {IERC4626-deposit}. */
   function deposit(uint256 _assets, address _receiver) public override whenNotPaused returns (uint256) {
     return super.deposit(_assets, _receiver);
-  }
-
-  /**
-   * @dev Invest idle vault assets into the underlying vault. Only operator roles can call this method.
-   * @param _amount Amount of assets to invest
-   */
-  function invest(uint256 _amount) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
-    IERC20(asset()).approve(address(underlyingVault), _amount);
-    uint256 shares = underlyingVault.deposit(_amount, address(this));
-
-    emit Invested(_amount, shares, msg.sender);
   }
 
   /**
@@ -165,6 +196,19 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
     return assets;
   }
 
+  /* ========== Admin methods ========== */
+
+  /**
+   * @dev Invest idle vault assets into the underlying vault. Only operator roles can call this method.
+   * @param _amount Amount of assets to invest
+   */
+  function invest(uint256 _amount) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
+    IERC20(asset()).approve(address(underlyingVault), _amount);
+    uint256 shares = underlyingVault.deposit(_amount, address(this));
+
+    emit Invested(_amount, shares, msg.sender);
+  }
+
   /**
    * @dev Triggers stopped state.
    * In this state the following methods are not callable:
@@ -188,5 +232,76 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
    */
   function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
     _unpause();
+  }
+
+  /* ========== Internal methods ========== */
+
+  /**
+   * @dev Internal conversion function (from assets to shares) with support for rounding direction.
+   *
+   * Will revert if assets > 0, totalSupply > 0 and totalAssets = 0. That corresponds to a case where any asset
+   * would represent an infinite amount of shares.
+   */
+  function _convertToShares(
+    uint256 assets,
+    Math.Rounding rounding,
+    bool preview
+  ) internal view returns (uint256 shares) {
+    uint256 supply = totalSupply();
+    return
+      (assets == 0 || supply == 0)
+        ? _initialConvertToShares(assets, rounding)
+        : assets.mulDiv(supply, _totalAssets(preview), rounding);
+  }
+
+  /**
+   * @dev Internal conversion function (from shares to assets) with support for rounding direction.
+   */
+  function _convertToAssets(
+    uint256 shares,
+    Math.Rounding rounding,
+    bool preview
+  ) internal view returns (uint256 assets) {
+    uint256 supply = totalSupply();
+    return
+      (supply == 0)
+        ? _initialConvertToAssets(shares, rounding)
+        : shares.mulDiv(_totalAssets(preview), supply, rounding);
+  }
+
+  /** @dev See {IERC4626-totalAssets}. */
+  function _totalAssets(bool preview) internal view returns (uint256) {
+    uint256 underlyingShares = underlyingVault.balanceOf(address(this));
+    uint256 underlyingAssets = preview == true
+      ? underlyingVault.previewRedeem(underlyingShares)
+      : underlyingVault.convertToAssets(underlyingShares);
+    return underlyingAssets + super.totalAssets();
+  }
+
+  /**
+   * @dev Withdraw/redeem common workflow.
+   */
+  function _withdraw(
+    address caller,
+    address receiver,
+    address owner,
+    uint256 assets,
+    uint256 shares
+  ) internal override {
+    if (caller != owner) {
+      _spendAllowance(owner, caller, shares);
+    }
+
+    _burn(owner, shares);
+
+    uint256 uninvestedAssets = IERC20(asset()).balanceOf(address(this));
+
+    if (assets > uninvestedAssets) {
+      underlyingVault.withdraw(assets - uninvestedAssets, address(this), address(this));
+    }
+
+    SafeERC20.safeTransfer(IERC20(asset()), receiver, assets);
+
+    emit Withdraw(caller, receiver, owner, assets, shares);
   }
 }
