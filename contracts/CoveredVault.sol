@@ -24,12 +24,23 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
 
   IERC4626 public immutable underlyingVault;
 
+  /** @dev Maximum amount of assets that can be managed by the vault.
+   * Helps to protect the growth of the vault and make sure all deposited assets can be invested and insured.
+   * Used to calculate the available amount for new deposits.
+   */
+  uint256 public maxAssetsLimit;
+
   /* ========== Events ========== */
 
   /**
    * @dev Emitted when assets are invested into the underlying vault
    */
   event Invested(uint256 amount, uint256 shares, address sender);
+
+  /**
+   * @dev Emitted when the max amount of assets that can be managed by the vault is updated
+   */
+  event MaxAssetsLimitUpdated(uint256 newLimit);
 
   /* ========== Custom Errors ========== */
 
@@ -46,14 +57,17 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
    * @param _name Name of the vault
    * @param _symbol Symbol of the vault
    * @param _admin address' admin operator
+   * @param _maxAssetsLimit New maximum asset amount limit
    */
   constructor(
     IERC4626 _underlyingVault,
     string memory _name,
     string memory _symbol,
-    address _admin
+    address _admin,
+    uint256 _maxAssetsLimit
   ) ERC4626(IERC20(_underlyingVault.asset())) ERC20(_name, _symbol) ERC20Permit(_name) AccessManager(_admin) {
     underlyingVault = _underlyingVault;
+    maxAssetsLimit = _maxAssetsLimit;
   }
 
   /* ========== View methods ========== */
@@ -96,6 +110,21 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
   /** @dev See {IERC4626-previewRedeem}. */
   function previewRedeem(uint256 shares) public view override returns (uint256) {
     return _convertToAssets(shares, Math.Rounding.Down, true);
+  }
+
+  /** @dev See {IERC4626-maxDeposit}. */
+  function maxDeposit(address) public view virtual override returns (uint256) {
+    uint256 assets = _totalAssets(false);
+    if (assets >= maxAssetsLimit) return 0;
+
+    unchecked {
+      return maxAssetsLimit - assets;
+    }
+  }
+
+  /** @dev See {IERC4626-maxMint}. */
+  function maxMint(address _account) public view virtual override returns (uint256) {
+    return _convertToShares(maxDeposit(_account), Math.Rounding.Down, false);
   }
 
   /* ========== User methods ========== */
@@ -207,6 +236,17 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
     uint256 shares = underlyingVault.deposit(_amount, address(this));
 
     emit Invested(_amount, shares, msg.sender);
+  }
+
+  /**
+   * @dev Sets the maximum amount of assets that can be managed by the vault. Used to calculate the available amount
+   * for new deposits.
+   * @param _maxAssetsLimit New maximum asset amount limit
+   */
+  function setMaxAssetsLimit(uint256 _maxAssetsLimit) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    maxAssetsLimit = _maxAssetsLimit;
+
+    emit MaxAssetsLimitUpdated(_maxAssetsLimit);
   }
 
   /**

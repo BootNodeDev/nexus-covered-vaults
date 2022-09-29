@@ -17,14 +17,16 @@ contract CoveredVaultFactory {
    * @param _name Name of the vault
    * @param _symbol Symbol of the vault
    * @param _admin address' admin operator
+   * @param _maxAssetsLimit New maximum asset amount limit
    */
   function create(
     IERC4626 _underlyingVault,
     string memory _name,
     string memory _symbol,
-    address _admin
+    address _admin,
+    uint256 _maxAssetsLimit
   ) external returns (address) {
-    CoveredVault vault = new CoveredVault(_underlyingVault, _name, _symbol, _admin);
+    CoveredVault vault = new CoveredVault(_underlyingVault, _name, _symbol, _admin, _maxAssetsLimit);
 
     emit CoveredVaultCreated(address(vault));
 
