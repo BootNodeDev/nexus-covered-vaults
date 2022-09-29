@@ -31,6 +31,11 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
    */
   event Invested(uint256 amount, uint256 shares, address sender);
 
+  /**
+   * @dev Emitted when shares are uninvested out of the underlying vault
+   */
+  event UnInvested(uint256 amount, uint256 shares, address sender);
+
   /* ========== Custom Errors ========== */
 
   error CoveredVault__DepositSlippage();
@@ -207,6 +212,16 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
     uint256 shares = underlyingVault.deposit(_amount, address(this));
 
     emit Invested(_amount, shares, msg.sender);
+  }
+
+  /**
+   * @dev Uninvest active vault assets out of the underlying vault. Only operator roles can call this method.
+   * @param _shares Amount of shares to uninvest
+   */
+  function uninvest(uint256 _shares) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
+    uint256 assets = underlyingVault.redeem(_shares, address(this), address(this));
+
+    emit UnInvested(assets, _shares, msg.sender);
   }
 
   /**
