@@ -21,7 +21,9 @@ export async function deployVaultFixture() {
 
   let vaultAddress: string = "";
 
-  await expect(vaultFactory.create(underlyingVault.address, vaultName, vaultSymbol, admin.address))
+  await expect(
+    vaultFactory.create(underlyingVault.address, vaultName, vaultSymbol, admin.address, ethers.constants.MaxUint256),
+  )
     .to.emit(vaultFactory, "CoveredVaultCreated")
     .withArgs((createdAddress: string) => {
       vaultAddress = createdAddress;
