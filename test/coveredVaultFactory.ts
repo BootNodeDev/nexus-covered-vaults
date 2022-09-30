@@ -17,7 +17,15 @@ describe("CoveredVaultFactory", function () {
       let vaultAddress: string = "";
 
       // deploy new vault
-      await expect(vaultFactory.create(underlyingVault.address, vaultName, vaultSymbol, admin.address))
+      await expect(
+        vaultFactory.create(
+          underlyingVault.address,
+          vaultName,
+          vaultSymbol,
+          admin.address,
+          ethers.constants.MaxUint256,
+        ),
+      )
         .to.emit(vaultFactory, "CoveredVaultCreated")
         .withArgs((createdAddress: string) => {
           vaultAddress = createdAddress;
@@ -37,6 +45,7 @@ describe("CoveredVaultFactory", function () {
       expect(await vault.name()).to.equal(vaultName);
       expect(await vault.symbol()).to.equal(vaultSymbol);
       expect(await vault.decimals()).to.equal(await underlyingAsset.decimals());
+      expect(await vault.maxAssetsLimit()).to.equal(ethers.constants.MaxUint256);
     });
   });
 });
