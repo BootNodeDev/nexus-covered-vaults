@@ -128,6 +128,91 @@ describe("CoveredVault", function () {
     });
   });
 
+  describe("uninvest", function () {
+    it("Should revert if not admin or bot", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const amount = ethers.utils.parseEther("1000");
+      // Mint assets to vault
+      await underlyingAsset.mint(vault.address, amount);
+
+      await expect(vault.connect(user1).uninvest(amount.div(2))).to.be.revertedWith(
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${await vault.BOT_ROLE()}`,
+      );
+
+      await vault.connect(admin).grantRole(await vault.BOT_ROLE(), user1.address);
+
+      // Invest to be able to uninvest
+      await vault.connect(admin).invest(amount);
+
+      await vault.connect(user1).uninvest(amount.div(2));
+      await vault.connect(admin).uninvest(amount.div(2));
+    });
+
+    it("Should revert if paused", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const amount = ethers.utils.parseEther("1000");
+
+      await vault.connect(admin).pause();
+
+      await expect(vault.connect(admin).uninvest(amount)).to.revertedWith("Pausable: paused");
+    });
+
+    it("Should allow to uninvest all active assets out of the underlying vault", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const amount = ethers.utils.parseEther("1000");
+      // Mint assets to vault
+      await underlyingAsset.mint(vault.address, amount);
+      await vault.connect(admin).invest(amount);
+
+      await expect(vault.connect(admin).uninvest(amount)).to.changeTokenBalances(
+        underlyingAsset,
+        [vault.address, underlyingVault.address],
+        [amount, amount.mul(-1)],
+      );
+    });
+
+    it("Should allow to uninvest active assets with returns out of the underlying vault", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const amount = ethers.utils.parseEther("1000");
+      // Mint assets to vault
+      await underlyingAsset.mint(vault.address, amount);
+
+      await vault.connect(admin).invest(amount);
+
+      // 100% yield
+      await underlyingAsset.mint(underlyingVault.address, amount);
+
+      await expect(vault.connect(admin).uninvest(amount)).to.changeTokenBalances(
+        underlyingAsset,
+        [vault.address, underlyingVault.address],
+        [amount.mul(2), amount.mul(-2)],
+      );
+    });
+
+    it("Should emit an event with amount, shares and caller", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const amount = ethers.utils.parseEther("1000");
+
+      // Mint assets to vault and invest them
+      await underlyingAsset.mint(vault.address, amount);
+      await vault.connect(admin).invest(amount);
+
+      await expect(vault.connect(admin).uninvest(amount))
+        .to.emit(vault, "UnInvested")
+        .withArgs(amount, amount, admin.address);
+    });
+  });
+
   describe("Pausable", function () {
     it("Should be able to pause only by admin", async function () {
       const { vault } = await loadFixture(deployVaultFixture);
