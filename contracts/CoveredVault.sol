@@ -118,25 +118,26 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
   }
 
   /** @dev See {IERC4626-maxDeposit}. */
-  function maxDeposit(address) public view virtual override returns (uint256) {
-    uint256 assets = _totalAssets(false);
-    if (assets >= maxAssetsLimit) return 0;
-
-    unchecked {
-      return maxAssetsLimit - assets;
-    }
+  function maxDeposit(address _receiver) public view virtual override returns (uint256 maxAvailableDeposit) {
+    (maxAvailableDeposit, ) = _maxDeposit(_receiver);
   }
 
   /** @dev See {IERC4626-maxMint}. */
-  function maxMint(address _account) public view virtual override returns (uint256) {
-    return _convertToShares(maxDeposit(_account), Math.Rounding.Down, false);
+  function maxMint(address _receiver) public view virtual override returns (uint256 maxAvailableMint) {
+    (maxAvailableMint, ) = _maxMint(_receiver);
   }
 
   /* ========== User methods ========== */
 
   /** @dev See {IERC4626-deposit}. */
   function deposit(uint256 _assets, address _receiver) public override whenNotPaused returns (uint256) {
-    return super.deposit(_assets, _receiver);
+    (uint256 maxAvailableDeposit, uint256 vaultTotalAssets) = _maxDeposit(_receiver);
+    require(_assets <= maxAvailableDeposit, "ERC4626: deposit more than max");
+
+    uint256 shares = _convertToShares(_assets, Math.Rounding.Down, vaultTotalAssets);
+    _deposit(_msgSender(), _receiver, _assets, shares);
+
+    return shares;
   }
 
   /**
@@ -157,7 +158,13 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
 
   /** @dev See {IERC4626-mint}. */
   function mint(uint256 _shares, address _receiver) public override whenNotPaused returns (uint256) {
-    return super.mint(_shares, _receiver);
+    (uint256 maxAvailableMint, uint256 vaultTotalAssets) = _maxMint(_receiver);
+    require(_shares <= maxAvailableMint, "ERC4626: mint more than max");
+
+    uint256 assets = _convertToAssets(_shares, Math.Rounding.Up, vaultTotalAssets);
+    _deposit(_msgSender(), _receiver, assets, _shares);
+
+    return assets;
   }
 
   /**
@@ -291,6 +298,42 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
 
   /* ========== Internal methods ========== */
 
+  /** @dev See {IERC4626-maxDeposit}. */
+  function _maxDeposit(address) internal view returns (uint256, uint256) {
+    uint256 assets = _totalAssets(false);
+    if (assets >= maxAssetsLimit) return (0, assets);
+
+    unchecked {
+      return (maxAssetsLimit - assets, assets);
+    }
+  }
+
+  /** @dev See {IERC4626-maxMint}. */
+  function _maxMint(address _receiver) internal view returns (uint256, uint256) {
+    (uint256 maxAvailableDeposit, uint256 vaultTotalAssets) = _maxDeposit(_receiver);
+    uint256 maxAvailableMint = _convertToShares(maxAvailableDeposit, Math.Rounding.Down, vaultTotalAssets);
+
+    return (maxAvailableMint, vaultTotalAssets);
+  }
+
+  /**
+   * @dev Internal conversion function (from assets to shares) with support for rounding direction.
+   *
+   * Will revert if assets > 0, totalSupply > 0 and totalAssets = 0. That corresponds to a case where any asset
+   * would represent an infinite amount of shares.
+   */
+  function _convertToShares(
+    uint256 assets,
+    Math.Rounding rounding,
+    uint256 calculatedTotalAssets
+  ) internal view returns (uint256 shares) {
+    uint256 supply = totalSupply();
+    return
+      (assets == 0 || supply == 0)
+        ? _initialConvertToShares(assets, rounding)
+        : assets.mulDiv(supply, calculatedTotalAssets, rounding);
+  }
+
   /**
    * @dev Internal conversion function (from assets to shares) with support for rounding direction.
    *
@@ -302,11 +345,22 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
     Math.Rounding rounding,
     bool preview
   ) internal view returns (uint256 shares) {
+    return _convertToShares(assets, rounding, _totalAssets(preview));
+  }
+
+  /**
+   * @dev Internal conversion function (from shares to assets) with support for rounding direction.
+   */
+  function _convertToAssets(
+    uint256 shares,
+    Math.Rounding rounding,
+    uint256 calculatedTotalAssets
+  ) internal view returns (uint256 assets) {
     uint256 supply = totalSupply();
     return
-      (assets == 0 || supply == 0)
-        ? _initialConvertToShares(assets, rounding)
-        : assets.mulDiv(supply, _totalAssets(preview), rounding);
+      (supply == 0)
+        ? _initialConvertToAssets(shares, rounding)
+        : shares.mulDiv(calculatedTotalAssets, supply, rounding);
   }
 
   /**
@@ -317,11 +371,7 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
     Math.Rounding rounding,
     bool preview
   ) internal view returns (uint256 assets) {
-    uint256 supply = totalSupply();
-    return
-      (supply == 0)
-        ? _initialConvertToAssets(shares, rounding)
-        : shares.mulDiv(_totalAssets(preview), supply, rounding);
+    return _convertToAssets(shares, rounding, _totalAssets(preview));
   }
 
   /** @dev See {IERC4626-totalAssets}. */
