@@ -5,7 +5,6 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ERC4626 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
-import { Pausable } from "@openzeppelin/contracts/security/Pausable.sol";
 import { AccessManager } from "./vault/AccessManager.sol";
 import { SafeERC4626 } from "./vault/SafeERC4626.sol";
 
@@ -14,8 +13,7 @@ import { SafeERC4626 } from "./vault/SafeERC4626.sol";
  * @dev An ERC-4626 vault that invest the assets in an underlying ERC-4626 vault. Invested funds are protected by
  * purchasing coverage on Nexus Mutual.
  */
-contract CoveredVault is SafeERC4626, AccessManager, Pausable {
-
+contract CoveredVault is SafeERC4626, AccessManager {
   /** @dev Role for botOperator */
   bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
 
@@ -127,31 +125,6 @@ contract CoveredVault is SafeERC4626, AccessManager, Pausable {
     maxAssetsLimit = _maxAssetsLimit;
 
     emit MaxAssetsLimitUpdated(_maxAssetsLimit);
-  }
-
-  /**
-   * @dev Triggers stopped state.
-   * In this state the following methods are not callable:
-   * - All user flows deposit/mint/redeem/withdraw
-   * - Operator methods that interact with the underlying vault
-   *
-   * Requirements:
-   *
-   * - The contract must not be paused.
-   */
-  function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
-    _pause();
-  }
-
-  /**
-   * @dev Returns to normal state.
-   *
-   * Requirements:
-   *
-   * - The contract must be paused.
-   */
-  function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
-    _unpause();
   }
 
   /* ========== Internal methods ========== */
