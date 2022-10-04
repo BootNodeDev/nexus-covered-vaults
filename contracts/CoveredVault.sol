@@ -1,24 +1,19 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.17;
 
-import { ERC4626 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
-import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
-import { ERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
-import { Pausable } from "@openzeppelin/contracts/security/Pausable.sol";
-import { AccessManager } from "./access/AccessManager.sol";
-import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { ERC4626 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
+import { AccessManager } from "./vault/AccessManager.sol";
+import { SafeERC4626 } from "./vault/SafeERC4626.sol";
 
 /**
  * @title CoveredVault
  * @dev An ERC-4626 vault that invest the assets in an underlying ERC-4626 vault. Invested funds are protected by
  * purchasing coverage on Nexus Mutual.
  */
-contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
-  using Math for uint256;
-
+contract CoveredVault is SafeERC4626, AccessManager {
   /** @dev Role for botOperator */
   bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
 
@@ -47,13 +42,6 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
    */
   event MaxAssetsLimitUpdated(uint256 newLimit);
 
-  /* ========== Custom Errors ========== */
-
-  error CoveredVault__DepositSlippage();
-  error CoveredVault__MintSlippage();
-  error CoveredVault__WithdrawSlippage();
-  error CoveredVault__RedeemSlippage();
-
   /* ========== Constructor ========== */
 
   /**
@@ -70,117 +58,21 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
     string memory _symbol,
     address _admin,
     uint256 _maxAssetsLimit
-  ) ERC4626(IERC20(_underlyingVault.asset())) ERC20(_name, _symbol) ERC20Permit(_name) AccessManager(_admin) {
+  ) SafeERC4626(IERC20(_underlyingVault.asset()), _name, _symbol) AccessManager(_admin) {
     underlyingVault = _underlyingVault;
     maxAssetsLimit = _maxAssetsLimit;
-  }
-
-  /* ========== View methods ========== */
-
-  /** @dev See {IERC20Metadata-decimals}. */
-  function decimals() public view override(ERC4626, ERC20) returns (uint8) {
-    return super.decimals();
-  }
-
-  /** @dev See {IERC4626-totalAssets}. */
-  function totalAssets() public view override returns (uint256) {
-    return _totalAssets(false);
-  }
-
-  /** @dev See {IERC4626-convertToShares}. */
-  function convertToShares(uint256 assets) public view override returns (uint256 shares) {
-    return _convertToShares(assets, Math.Rounding.Down, false);
-  }
-
-  /** @dev See {IERC4626-convertToAssets}. */
-  function convertToAssets(uint256 shares) public view override returns (uint256 assets) {
-    return _convertToAssets(shares, Math.Rounding.Down, false);
-  }
-
-  /** @dev See {IERC4626-previewDeposit}. */
-  function previewDeposit(uint256 assets) public view override returns (uint256) {
-    return _convertToShares(assets, Math.Rounding.Down, false);
-  }
-
-  /** @dev See {IERC4626-previewMint}. */
-  function previewMint(uint256 shares) public view override returns (uint256) {
-    return _convertToAssets(shares, Math.Rounding.Up, false);
-  }
-
-  /** @dev See {IERC4626-previewWithdraw}. */
-  function previewWithdraw(uint256 assets) public view override returns (uint256) {
-    return _convertToShares(assets, Math.Rounding.Up, true);
-  }
-
-  /** @dev See {IERC4626-previewRedeem}. */
-  function previewRedeem(uint256 shares) public view override returns (uint256) {
-    return _convertToAssets(shares, Math.Rounding.Down, true);
-  }
-
-  /** @dev See {IERC4626-maxDeposit}. */
-  function maxDeposit(address _receiver) public view virtual override returns (uint256 maxAvailableDeposit) {
-    (maxAvailableDeposit, ) = _maxDeposit(_receiver);
-  }
-
-  /** @dev See {IERC4626-maxMint}. */
-  function maxMint(address _receiver) public view virtual override returns (uint256 maxAvailableMint) {
-    (maxAvailableMint, ) = _maxMint(_receiver);
   }
 
   /* ========== User methods ========== */
 
   /** @dev See {IERC4626-deposit}. */
   function deposit(uint256 _assets, address _receiver) public override whenNotPaused returns (uint256) {
-    (uint256 maxAvailableDeposit, uint256 vaultTotalAssets) = _maxDeposit(_receiver);
-    require(_assets <= maxAvailableDeposit, "ERC4626: deposit more than max");
-
-    uint256 shares = _convertToShares(_assets, Math.Rounding.Down, vaultTotalAssets);
-    _deposit(_msgSender(), _receiver, _assets, shares);
-
-    return shares;
-  }
-
-  /**
-   * @dev Overloaded version of ERC-4626’s deposit. Reverts if depositing _assets mints less than _minShares shares
-   * @param _assets Amount of assets to deposit
-   * @param _receiver Account that receives the minted shares
-   * @param _minShares Minimum amount of shares to receive
-   */
-  function deposit(
-    uint256 _assets,
-    address _receiver,
-    uint256 _minShares
-  ) external returns (uint256) {
-    uint256 shares = deposit(_assets, _receiver);
-    if (shares < _minShares) revert CoveredVault__DepositSlippage();
-    return shares;
+    return super.deposit(_assets, _receiver);
   }
 
   /** @dev See {IERC4626-mint}. */
   function mint(uint256 _shares, address _receiver) public override whenNotPaused returns (uint256) {
-    (uint256 maxAvailableMint, uint256 vaultTotalAssets) = _maxMint(_receiver);
-    require(_shares <= maxAvailableMint, "ERC4626: mint more than max");
-
-    uint256 assets = _convertToAssets(_shares, Math.Rounding.Up, vaultTotalAssets);
-    _deposit(_msgSender(), _receiver, assets, _shares);
-
-    return assets;
-  }
-
-  /**
-   * @dev Overloaded version of ERC-4626’s mint. Reverts if to mint _shares more than _maxAssets assets are deposited
-   * @param _shares Amount of shares to mint
-   * @param _receiver Account that receives the minted shares
-   * @param _maxAssets Maximum amount of assets to deposit
-   */
-  function mint(
-    uint256 _shares,
-    address _receiver,
-    uint256 _maxAssets
-  ) external returns (uint256) {
-    uint256 assets = mint(_shares, _receiver);
-    if (assets > _maxAssets) revert CoveredVault__MintSlippage();
-    return assets;
+    return super.mint(_shares, _receiver);
   }
 
   /** @dev See {IERC4626-withdraw}. */
@@ -192,24 +84,6 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
     return super.withdraw(_assets, _receiver, _owner);
   }
 
-  /**
-   * @dev Overloaded version of ERC-4626’s withdraw. Reverts if to withdraw _assets more than _maxShares shares are burned
-   * @param _assets Amount of assets to withdraw
-   * @param _receiver Account that receives the withdrawed assets
-   * @param _owner Account from where shares are burned
-   * @param _maxShares Maximum amount of shares to burn
-   */
-  function withdraw(
-    uint256 _assets,
-    address _receiver,
-    address _owner,
-    uint256 _maxShares
-  ) external returns (uint256) {
-    uint256 shares = withdraw(_assets, _receiver, _owner);
-    if (shares > _maxShares) revert CoveredVault__WithdrawSlippage();
-    return shares;
-  }
-
   /** @dev See {IERC4626-redeem}. */
   function redeem(
     uint256 _shares,
@@ -217,24 +91,6 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
     address _owner
   ) public override whenNotPaused returns (uint256) {
     return super.redeem(_shares, _receiver, _owner);
-  }
-
-  /**
-   * @dev Overloaded version of ERC-4626’s redeem. Reverts if redeemed assets are less than _minAssets
-   * @param _shares Amount of shares to burn
-   * @param _receiver Account that receives the redeemed assets
-   * @param _owner Account from where shares are burned
-   * @param _minAssets Minimum amount of assets to receive
-   */
-  function redeem(
-    uint256 _shares,
-    address _receiver,
-    address _owner,
-    uint256 _minAssets
-  ) external returns (uint256) {
-    uint256 assets = redeem(_shares, _receiver, _owner);
-    if (assets < _minAssets) revert CoveredVault__RedeemSlippage();
-    return assets;
   }
 
   /* ========== Admin methods ========== */
@@ -271,117 +127,7 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
     emit MaxAssetsLimitUpdated(_maxAssetsLimit);
   }
 
-  /**
-   * @dev Triggers stopped state.
-   * In this state the following methods are not callable:
-   * - All user flows deposit/mint/redeem/withdraw
-   * - Operator methods that interact with the underlying vault
-   *
-   * Requirements:
-   *
-   * - The contract must not be paused.
-   */
-  function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
-    _pause();
-  }
-
-  /**
-   * @dev Returns to normal state.
-   *
-   * Requirements:
-   *
-   * - The contract must be paused.
-   */
-  function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
-    _unpause();
-  }
-
   /* ========== Internal methods ========== */
-
-  /** @dev See {IERC4626-maxDeposit}. */
-  function _maxDeposit(address) internal view returns (uint256, uint256) {
-    uint256 assets = _totalAssets(false);
-    if (assets >= maxAssetsLimit) return (0, assets);
-
-    unchecked {
-      return (maxAssetsLimit - assets, assets);
-    }
-  }
-
-  /** @dev See {IERC4626-maxMint}. */
-  function _maxMint(address _receiver) internal view returns (uint256, uint256) {
-    (uint256 maxAvailableDeposit, uint256 vaultTotalAssets) = _maxDeposit(_receiver);
-    uint256 maxAvailableMint = _convertToShares(maxAvailableDeposit, Math.Rounding.Down, vaultTotalAssets);
-
-    return (maxAvailableMint, vaultTotalAssets);
-  }
-
-  /**
-   * @dev Internal conversion function (from assets to shares) with support for rounding direction.
-   *
-   * Will revert if assets > 0, totalSupply > 0 and totalAssets = 0. That corresponds to a case where any asset
-   * would represent an infinite amount of shares.
-   */
-  function _convertToShares(
-    uint256 assets,
-    Math.Rounding rounding,
-    uint256 calculatedTotalAssets
-  ) internal view returns (uint256 shares) {
-    uint256 supply = totalSupply();
-    return
-      (assets == 0 || supply == 0)
-        ? _initialConvertToShares(assets, rounding)
-        : assets.mulDiv(supply, calculatedTotalAssets, rounding);
-  }
-
-  /**
-   * @dev Internal conversion function (from assets to shares) with support for rounding direction.
-   *
-   * Will revert if assets > 0, totalSupply > 0 and totalAssets = 0. That corresponds to a case where any asset
-   * would represent an infinite amount of shares.
-   */
-  function _convertToShares(
-    uint256 assets,
-    Math.Rounding rounding,
-    bool preview
-  ) internal view returns (uint256 shares) {
-    return _convertToShares(assets, rounding, _totalAssets(preview));
-  }
-
-  /**
-   * @dev Internal conversion function (from shares to assets) with support for rounding direction.
-   */
-  function _convertToAssets(
-    uint256 shares,
-    Math.Rounding rounding,
-    uint256 calculatedTotalAssets
-  ) internal view returns (uint256 assets) {
-    uint256 supply = totalSupply();
-    return
-      (supply == 0)
-        ? _initialConvertToAssets(shares, rounding)
-        : shares.mulDiv(calculatedTotalAssets, supply, rounding);
-  }
-
-  /**
-   * @dev Internal conversion function (from shares to assets) with support for rounding direction.
-   */
-  function _convertToAssets(
-    uint256 shares,
-    Math.Rounding rounding,
-    bool preview
-  ) internal view returns (uint256 assets) {
-    return _convertToAssets(shares, rounding, _totalAssets(preview));
-  }
-
-  /** @dev See {IERC4626-totalAssets}. */
-  function _totalAssets(bool preview) internal view returns (uint256) {
-    uint256 underlyingShares = underlyingVault.balanceOf(address(this));
-    uint256 underlyingAssets = preview == true
-      ? underlyingVault.previewRedeem(underlyingShares)
-      : underlyingVault.convertToAssets(underlyingShares);
-    return underlyingAssets + super.totalAssets();
-  }
 
   /**
    * @dev Withdraw/redeem common workflow.
@@ -408,5 +154,24 @@ contract CoveredVault is ERC4626, ERC20Permit, AccessManager, Pausable {
     SafeERC20.safeTransfer(IERC20(asset()), receiver, assets);
 
     emit Withdraw(caller, receiver, owner, assets, shares);
+  }
+
+  /** @dev See {IERC4626-maxDeposit}. */
+  function _maxDeposit(address) internal view override returns (uint256, uint256) {
+    uint256 assets = _totalAssets(false);
+    if (assets >= maxAssetsLimit) return (0, assets);
+
+    unchecked {
+      return (maxAssetsLimit - assets, assets);
+    }
+  }
+
+  /** @dev See {IERC4626-totalAssets}. */
+  function _totalAssets(bool preview) internal view override returns (uint256) {
+    uint256 underlyingShares = underlyingVault.balanceOf(address(this));
+    uint256 underlyingAssets = preview == true
+      ? underlyingVault.previewRedeem(underlyingShares)
+      : underlyingVault.convertToAssets(underlyingShares);
+    return underlyingAssets + ERC4626.totalAssets();
   }
 }

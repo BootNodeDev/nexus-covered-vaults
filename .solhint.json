@@ -6,7 +6,7 @@
       "not-rely-on-time": "off",
       "func-visibility": ["warn", { "ignoreConstructors": true }],
       "prettier/prettier": ["error", { "endOfLine": "auto" }],
-      "ordering": "warn",
+      "ordering": "off",
       "var-name-mixedcase": "off",
       "func-name-mixedcase": "off"
     }
