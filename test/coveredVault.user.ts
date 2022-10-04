@@ -318,9 +318,9 @@ describe("CoveredVault", function () {
       await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
       await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
 
-      await expect(vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address)).to.be.revertedWith(
-        "ERC4626: deposit more than max",
-      );
+      await expect(
+        vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address),
+      ).to.be.revertedWithCustomError(vault, "BaseERC4626__DepositMoreThanMax");
     });
   });
 
@@ -402,9 +402,9 @@ describe("CoveredVault", function () {
       await vault.connect(user1)["mint(uint256,address)"](depositAmount, user1.address);
       await vault.connect(user1)["mint(uint256,address)"](depositAmount, user1.address);
 
-      await expect(vault.connect(user1)["mint(uint256,address)"](depositAmount, user1.address)).to.be.revertedWith(
-        "ERC4626: mint more than max",
-      );
+      await expect(
+        vault.connect(user1)["mint(uint256,address)"](depositAmount, user1.address),
+      ).to.be.revertedWithCustomError(vault, "BaseERC4626__MintMoreThanMax");
     });
   });
 

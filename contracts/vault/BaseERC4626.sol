@@ -14,6 +14,11 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 abstract contract BaseERC4626 is ERC4626, ERC20Permit {
   using Math for uint256;
 
+  /* ========== Custom Errors ========== */
+
+  error BaseERC4626__DepositMoreThanMax();
+  error BaseERC4626__MintMoreThanMax();
+
   /**
    * @dev Set the underlying vault contract, name and symbol of the vault.
    * @param _asset Underlying asset
@@ -85,7 +90,7 @@ abstract contract BaseERC4626 is ERC4626, ERC20Permit {
   /** @dev See {IERC4626-deposit}. */
   function deposit(uint256 _assets, address _receiver) public virtual override returns (uint256) {
     (uint256 maxAvailableDeposit, uint256 vaultTotalAssets) = _maxDeposit(_receiver);
-    require(_assets <= maxAvailableDeposit, "ERC4626: deposit more than max");
+    if (_assets > maxAvailableDeposit) revert BaseERC4626__DepositMoreThanMax();
 
     uint256 shares = _convertToShares(_assets, Math.Rounding.Down, vaultTotalAssets);
     _deposit(_msgSender(), _receiver, _assets, shares);
@@ -96,7 +101,7 @@ abstract contract BaseERC4626 is ERC4626, ERC20Permit {
   /** @dev See {IERC4626-mint}. */
   function mint(uint256 _shares, address _receiver) public virtual override returns (uint256) {
     (uint256 maxAvailableMint, uint256 vaultTotalAssets) = _maxMint(_receiver);
-    require(_shares <= maxAvailableMint, "ERC4626: mint more than max");
+    if (_shares > maxAvailableMint) revert BaseERC4626__MintMoreThanMax();
 
     uint256 assets = _convertToAssets(_shares, Math.Rounding.Up, vaultTotalAssets);
     _deposit(_msgSender(), _receiver, assets, _shares);
