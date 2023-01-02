@@ -15,6 +15,8 @@ describe("CoveredVaultFactory", function () {
 
       const [, , , admin] = await ethers.getSigners();
       let vaultAddress: string = "";
+      const depositFee = 300; // 3%
+      const timeLock = 24 * 60 * 60; // 24hs
 
       // deploy new vault
       await expect(
@@ -24,6 +26,8 @@ describe("CoveredVaultFactory", function () {
           vaultSymbol,
           admin.address,
           ethers.constants.MaxUint256,
+          depositFee,
+          timeLock,
         ),
       )
         .to.emit(vaultFactory, "CoveredVaultCreated")

@@ -25,6 +25,24 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   uint256 public maxAssetsLimit;
 
+  /** @dev Percentage charged to users on deposit on 1e4 units.
+   * Helps to avoid short term deposits.
+   * After construction is updated with `setDepositFee` and have effect after `applyDepositFee` is called with timelock due.
+   */
+  uint256 public depositFee;
+
+  /** @dev Timelock for depositFee application */
+  uint256 public timeLockDepositFee;
+
+  /** @dev Data related to a deposit fee change */
+  struct RequestDepositFeeChange {
+    uint256 requestedOnTimestamp;
+    uint256 newFee;
+    bool applied;
+  }
+  RequestDepositFeeChange depositFeeChange;
+
+
   /* ========== Events ========== */
 
   /**
@@ -42,6 +60,11 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   event MaxAssetsLimitUpdated(uint256 newLimit);
 
+  /**
+   * @dev Emitted when the deposit fee changes effectively
+   */
+  event DepositFeeUpdated(uint256 newFee);
+
   /* ========== Constructor ========== */
 
   /**
@@ -51,16 +74,22 @@ contract CoveredVault is SafeERC4626, AccessManager {
    * @param _symbol Symbol of the vault
    * @param _admin address' admin operator
    * @param _maxAssetsLimit New maximum asset amount limit
+   * @param _depositFee Fee for new deposits 
+   * @param _timeLockDepositFee Timelock for changes in depositFee after construction
    */
   constructor(
     IERC4626 _underlyingVault,
     string memory _name,
     string memory _symbol,
     address _admin,
-    uint256 _maxAssetsLimit
+    uint256 _maxAssetsLimit,
+    uint256 _depositFee,
+    uint256 _timeLockDepositFee
   ) SafeERC4626(IERC20(_underlyingVault.asset()), _name, _symbol) AccessManager(_admin) {
     underlyingVault = _underlyingVault;
     maxAssetsLimit = _maxAssetsLimit;
+    depositFee = _depositFee;
+    timeLockDepositFee = _timeLockDepositFee;
   }
 
   /* ========== User methods ========== */
@@ -125,6 +154,27 @@ contract CoveredVault is SafeERC4626, AccessManager {
     maxAssetsLimit = _maxAssetsLimit;
 
     emit MaxAssetsLimitUpdated(_maxAssetsLimit);
+  }
+
+   /**
+   * @dev Sets the depositFee to be applied after timeLockDepositFee has passed.
+   * @param _depositFee New fee percentage to charge users on deposit
+   */
+  function setDepositFee(uint256 _depositFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(_depositFee >= 0 && _depositFee <= 1e4, "deposit fee out of range");
+    depositFeeChange = RequestDepositFeeChange(block.timestamp, _depositFee, false);
+  }
+
+   /**
+   * @dev Sets the depositFee to his pending value if timeLockDepositFee has passed.
+   */
+  function applyFee() external onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(depositFeeChange.requestedOnTimestamp != 0, "Fee change not requested before");
+    require(depositFeeChange.applied == true, "Fee change already applied");
+    require(depositFeeChange.requestedOnTimestamp+timeLockDepositFee >= block.timestamp, "Timelock not due");
+
+    depositFee = depositFeeChange.newFee;
+    depositFeeChange.applied = true;
   }
 
   /* ========== Internal methods ========== */
