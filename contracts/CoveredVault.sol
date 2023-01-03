@@ -40,8 +40,7 @@ contract CoveredVault is SafeERC4626, AccessManager {
     uint256 newFee;
     bool applied;
   }
-  RequestDepositFeeChange depositFeeChange;
-
+  RequestDepositFeeChange public depositFeeChange;
 
   /* ========== Events ========== */
 
@@ -74,7 +73,7 @@ contract CoveredVault is SafeERC4626, AccessManager {
    * @param _symbol Symbol of the vault
    * @param _admin address' admin operator
    * @param _maxAssetsLimit New maximum asset amount limit
-   * @param _depositFee Fee for new deposits 
+   * @param _depositFee Fee for new deposits
    * @param _timeLockDepositFee Timelock for changes in depositFee after construction
    */
   constructor(
@@ -156,7 +155,7 @@ contract CoveredVault is SafeERC4626, AccessManager {
     emit MaxAssetsLimitUpdated(_maxAssetsLimit);
   }
 
-   /**
+  /**
    * @dev Sets the depositFee to be applied after timeLockDepositFee has passed.
    * @param _depositFee New fee percentage to charge users on deposit
    */
@@ -165,13 +164,13 @@ contract CoveredVault is SafeERC4626, AccessManager {
     depositFeeChange = RequestDepositFeeChange(block.timestamp, _depositFee, false);
   }
 
-   /**
+  /**
    * @dev Sets the depositFee to his pending value if timeLockDepositFee has passed.
    */
   function applyFee() external onlyRole(DEFAULT_ADMIN_ROLE) {
     require(depositFeeChange.requestedOnTimestamp != 0, "Fee change not requested before");
     require(depositFeeChange.applied == true, "Fee change already applied");
-    require(depositFeeChange.requestedOnTimestamp+timeLockDepositFee >= block.timestamp, "Timelock not due");
+    require(depositFeeChange.requestedOnTimestamp + timeLockDepositFee >= block.timestamp, "Timelock not due");
 
     depositFee = depositFeeChange.newFee;
     depositFeeChange.applied = true;

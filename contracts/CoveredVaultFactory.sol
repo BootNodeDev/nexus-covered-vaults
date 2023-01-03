@@ -18,7 +18,7 @@ contract CoveredVaultFactory {
    * @param _symbol Symbol of the vault
    * @param _admin address' admin operator
    * @param _maxAssetsLimit New maximum asset amount limit
-   * @param _depositFee Fee for new deposits 
+   * @param _depositFee Fee for new deposits
    * @param _timeLockDepositFee Timelock for changes in depositFee after construction
    */
   function create(
@@ -30,7 +30,15 @@ contract CoveredVaultFactory {
     uint256 _depositFee,
     uint256 _timeLockDepositFee
   ) external returns (address) {
-    CoveredVault vault = new CoveredVault(_underlyingVault, _name, _symbol, _admin, _maxAssetsLimit, _depositFee, _timeLockDepositFee);
+    CoveredVault vault = new CoveredVault(
+      _underlyingVault,
+      _name,
+      _symbol,
+      _admin,
+      _maxAssetsLimit,
+      _depositFee,
+      _timeLockDepositFee
+    );
 
     emit CoveredVaultCreated(address(vault));
 
