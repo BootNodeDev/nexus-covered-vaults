@@ -19,7 +19,6 @@ contract CoveredVaultFactory {
    * @param _admin address' admin operator
    * @param _maxAssetsLimit New maximum asset amount limit
    * @param _depositFee Fee for new deposits
-   * @param _timeLockDepositFee Timelock for changes in depositFee after construction
    */
   function create(
     IERC4626 _underlyingVault,
@@ -27,18 +26,9 @@ contract CoveredVaultFactory {
     string memory _symbol,
     address _admin,
     uint256 _maxAssetsLimit,
-    uint256 _depositFee,
-    uint256 _timeLockDepositFee
+    uint256 _depositFee
   ) external returns (address) {
-    CoveredVault vault = new CoveredVault(
-      _underlyingVault,
-      _name,
-      _symbol,
-      _admin,
-      _maxAssetsLimit,
-      _depositFee,
-      _timeLockDepositFee
-    );
+    CoveredVault vault = new CoveredVault(_underlyingVault, _name, _symbol, _admin, _maxAssetsLimit, _depositFee);
 
     emit CoveredVaultCreated(address(vault));
 

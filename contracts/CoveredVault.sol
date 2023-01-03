@@ -14,8 +14,20 @@ import { SafeERC4626 } from "./vault/SafeERC4626.sol";
  * purchasing coverage on Nexus Mutual.
  */
 contract CoveredVault is SafeERC4626, AccessManager {
+  /** @dev Data related to a deposit fee change */
+  struct ProposedDepositFee {
+    uint256 requestedOnTimestamp;
+    uint256 newFee;
+  }
+
   /** @dev Role for botOperator */
   bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
+
+  /** @dev Timelock for depositFee application */
+  uint256 public constant FEE_TIME_LOCK = 2 weeks;
+
+  /** @dev fee denominator 100% with two decimals */
+  uint256 public constant FEE_DENOMINATOR = 1e4;
 
   IERC4626 public immutable underlyingVault;
 
@@ -31,16 +43,7 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   uint256 public depositFee;
 
-  /** @dev Timelock for depositFee application */
-  uint256 public timeLockDepositFee;
-
-  /** @dev Data related to a deposit fee change */
-  struct RequestDepositFeeChange {
-    uint256 requestedOnTimestamp;
-    uint256 newFee;
-    bool applied;
-  }
-  RequestDepositFeeChange public depositFeeChange;
+  ProposedDepositFee public proposedDepositFee;
 
   /* ========== Events ========== */
 
@@ -64,6 +67,16 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   event DepositFeeUpdated(uint256 newFee);
 
+  /**
+   * @dev Emitted when the deposit fee is set to be changed
+   */
+  event NewDepositFeeProposed(uint256 newFee);
+
+  /* ========== Custom Errors ========== */
+  error CovererdVault__FeeOutOfBound();
+  error CovererdVault__FeeProposalNotFound();
+  error CovererdVault__FeeTimeLockNotDue();
+
   /* ========== Constructor ========== */
 
   /**
@@ -74,7 +87,6 @@ contract CoveredVault is SafeERC4626, AccessManager {
    * @param _admin address' admin operator
    * @param _maxAssetsLimit New maximum asset amount limit
    * @param _depositFee Fee for new deposits
-   * @param _timeLockDepositFee Timelock for changes in depositFee after construction
    */
   constructor(
     IERC4626 _underlyingVault,
@@ -82,24 +94,24 @@ contract CoveredVault is SafeERC4626, AccessManager {
     string memory _symbol,
     address _admin,
     uint256 _maxAssetsLimit,
-    uint256 _depositFee,
-    uint256 _timeLockDepositFee
+    uint256 _depositFee
   ) SafeERC4626(IERC20(_underlyingVault.asset()), _name, _symbol) AccessManager(_admin) {
     underlyingVault = _underlyingVault;
     maxAssetsLimit = _maxAssetsLimit;
     depositFee = _depositFee;
-    timeLockDepositFee = _timeLockDepositFee;
   }
 
   /* ========== User methods ========== */
 
   /** @dev See {IERC4626-deposit}. */
   function deposit(uint256 _assets, address _receiver) public override whenNotPaused returns (uint256) {
+    // transferFees(); // convertir a shares
     return super.deposit(_assets, _receiver);
   }
 
   /** @dev See {IERC4626-mint}. */
   function mint(uint256 _shares, address _receiver) public override whenNotPaused returns (uint256) {
+    // transferFees(); // shares
     return super.mint(_shares, _receiver);
   }
 
@@ -156,24 +168,23 @@ contract CoveredVault is SafeERC4626, AccessManager {
   }
 
   /**
-   * @dev Sets the depositFee to be applied after timeLockDepositFee has passed.
+   * @dev Sets the depositFee to be applied after FEE_TIME_LOCK has passed.
    * @param _depositFee New fee percentage to charge users on deposit
    */
   function setDepositFee(uint256 _depositFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    require(_depositFee >= 0 && _depositFee <= 1e4, "deposit fee out of range");
-    depositFeeChange = RequestDepositFeeChange(block.timestamp, _depositFee, false);
+    if (_depositFee > FEE_DENOMINATOR) revert CovererdVault__FeeOutOfBound();
+    delete proposedDepositFee;
   }
 
   /**
-   * @dev Sets the depositFee to his pending value if timeLockDepositFee has passed.
+   * @dev Sets the depositFee to his pending value if FEE_TIME_LOCK has passed.
    */
   function applyFee() external onlyRole(DEFAULT_ADMIN_ROLE) {
-    require(depositFeeChange.requestedOnTimestamp != 0, "Fee change not requested before");
-    require(depositFeeChange.applied == true, "Fee change already applied");
-    require(depositFeeChange.requestedOnTimestamp + timeLockDepositFee >= block.timestamp, "Timelock not due");
+    if (proposedDepositFee.requestedOnTimestamp == 0) revert CovererdVault__FeeProposalNotFound();
+    if (proposedDepositFee.requestedOnTimestamp + FEE_TIME_LOCK < block.timestamp)
+      revert CovererdVault__FeeTimeLockNotDue();
 
-    depositFee = depositFeeChange.newFee;
-    depositFeeChange.applied = true;
+    depositFee = proposedDepositFee.newFee;
   }
 
   /* ========== Internal methods ========== */

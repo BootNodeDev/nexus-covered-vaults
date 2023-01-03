@@ -20,7 +20,7 @@ export async function deployVaultFixture() {
   const [, , , admin] = await ethers.getSigners();
 
   let vaultAddress: string = "";
-  const timeLock = 24 * 60 * 60;
+  const depositFee = 0.3 * 1e4;
 
   await expect(
     vaultFactory.create(
@@ -29,8 +29,7 @@ export async function deployVaultFixture() {
       vaultSymbol,
       admin.address,
       ethers.constants.MaxUint256,
-      300,
-      timeLock,
+      depositFee,
     ),
   )
     .to.emit(vaultFactory, "CoveredVaultCreated")
