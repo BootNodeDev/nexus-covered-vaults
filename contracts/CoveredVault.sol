@@ -7,6 +7,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { ERC4626 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import { AccessManager } from "./vault/AccessManager.sol";
 import { SafeERC4626 } from "./vault/SafeERC4626.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
  * @title CoveredVault
@@ -105,14 +106,46 @@ contract CoveredVault is SafeERC4626, AccessManager {
 
   /** @dev See {IERC4626-deposit}. */
   function deposit(uint256 _assets, address _receiver) public override whenNotPaused returns (uint256) {
-    // transferFees(); // convertir a shares
-    return super.deposit(_assets, _receiver);
+    (uint256 maxAvailableDeposit, uint256 vaultTotalAssets) = _maxDeposit(_receiver);
+    if (_assets > maxAvailableDeposit) revert BaseERC4626__DepositMoreThanMax();
+
+    uint256 fee = _calculateFee(_assets);
+
+    uint256 shares = _convertToShares(_assets - fee, Math.Rounding.Down, vaultTotalAssets);
+    _deposit(_msgSender(), _receiver, _assets, shares);
+    _transferFees(fee);
+
+    return shares;
   }
 
   /** @dev See {IERC4626-mint}. */
   function mint(uint256 _shares, address _receiver) public override whenNotPaused returns (uint256) {
-    // transferFees(); // shares
-    return super.mint(_shares, _receiver);
+    (uint256 maxAvailableMint, uint256 vaultTotalAssets) = _maxMint(_receiver);
+    if (_shares > maxAvailableMint) revert BaseERC4626__MintMoreThanMax();
+
+    // shares = assets - assets*fee%
+    // shares = assets * (1-fee%)
+    // assets = shares / (1-fee%)
+    uint256 assets = _convertToAssets(
+      (_shares * FEE_DENOMINATOR) / (FEE_DENOMINATOR - depositFee),
+      Math.Rounding.Up,
+      vaultTotalAssets
+    );
+
+    _deposit(_msgSender(), _receiver, assets, _shares);
+    _transferFees(_calculateFee(assets));
+
+    return assets;
+  }
+
+  /** @dev Get depositFee % of _assets */
+  function _calculateFee(uint256 _assets) private view returns (uint256) {
+    return (_assets * depositFee) / FEE_DENOMINATOR;
+  }
+
+  /** @dev Transfer underlyingAsset amount of _fee to operator */
+  function _transferFees(uint256 _fee) private returns (bool) {
+    return IERC20(asset()).transfer(getRoleMember(DEFAULT_ADMIN_ROLE, 0), _fee);
   }
 
   /** @dev See {IERC4626-withdraw}. */
@@ -173,7 +206,9 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   function setDepositFee(uint256 _depositFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
     if (_depositFee > FEE_DENOMINATOR) revert CovererdVault__FeeOutOfBound();
-    delete proposedDepositFee;
+
+    proposedDepositFee.newFee = _depositFee;
+    proposedDepositFee.requestedOnTimestamp = block.timestamp;
   }
 
   /**
@@ -181,10 +216,11 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   function applyFee() external onlyRole(DEFAULT_ADMIN_ROLE) {
     if (proposedDepositFee.requestedOnTimestamp == 0) revert CovererdVault__FeeProposalNotFound();
-    if (proposedDepositFee.requestedOnTimestamp + FEE_TIME_LOCK < block.timestamp)
+    if (block.timestamp < proposedDepositFee.requestedOnTimestamp + FEE_TIME_LOCK)
       revert CovererdVault__FeeTimeLockNotDue();
 
     depositFee = proposedDepositFee.newFee;
+    delete proposedDepositFee;
   }
 
   /* ========== Internal methods ========== */

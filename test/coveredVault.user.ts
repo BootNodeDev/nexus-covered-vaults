@@ -1,4 +1,5 @@
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
+import { increase } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
 import { expect } from "chai";
 import { constants } from "ethers";
 import { ethers } from "hardhat";
@@ -324,6 +325,50 @@ describe("CoveredVault", function () {
     });
   });
 
+  describe("deposit with fee", function () {
+    it("Should discount fee and transfer it to operator", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+
+      const [user1, user2, , admin] = await ethers.getSigners();
+      await vault.connect(admin).setDepositFee(0.05 * 1e4);
+      await increase(2 * 7 * 24 * 60 * 60); // 2 weeks
+      await vault.connect(admin).applyFee();
+
+      const operatorInitialBalance = await underlyingAsset.balanceOf(admin.address);
+      const vaultInitialBalance = await underlyingAsset.balanceOf(vault.address);
+
+      // Mint assets to user and deposit
+      await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
+      await underlyingAsset.mint(user2.address, ethers.utils.parseEther("10000"));
+
+      const depositAmount = ethers.utils.parseEther("100");
+
+      await underlyingAsset.connect(user1).approve(vault.address, depositAmount);
+      await underlyingAsset.connect(user2).approve(vault.address, depositAmount);
+
+      const initialSharesUser1 = await vault.balanceOf(user1.address);
+      const initialSharesUser2 = await vault.balanceOf(user2.address);
+
+      await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
+      await vault.connect(user2)["deposit(uint256,address)"](depositAmount, user2.address);
+
+      const firstDepositSharesUser1 = await vault.balanceOf(user1.address);
+      const firstDepositSharesUser2 = await vault.balanceOf(user2.address);
+
+      const fee = depositAmount.mul(5).div(100); // 5% of depositAmount
+
+      // 1:1 rate
+      expect(firstDepositSharesUser1).to.equal(initialSharesUser1.add(depositAmount.sub(fee)));
+      expect(firstDepositSharesUser2).to.equal(initialSharesUser2.add(depositAmount.sub(fee)));
+
+      const operatorAfterBalance = await underlyingAsset.balanceOf(admin.address);
+      const vaultAfterBalance = await underlyingAsset.balanceOf(vault.address);
+
+      expect(vaultAfterBalance).to.equal(vaultInitialBalance.add(depositAmount.sub(fee).mul(2)));
+      expect(operatorAfterBalance).to.equal(operatorInitialBalance.add(fee).add(fee));
+    });
+  });
+
   describe("mint", function () {
     it("Should account for assets in the vault", async function () {
       const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
@@ -405,6 +450,50 @@ describe("CoveredVault", function () {
       await expect(
         vault.connect(user1)["mint(uint256,address)"](depositAmount, user1.address),
       ).to.be.revertedWithCustomError(vault, "BaseERC4626__MintMoreThanMax");
+    });
+  });
+
+  describe("mint with fee", function () {
+    it("Should discount fee and transfer it to operator", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, user2, , admin] = await ethers.getSigners();
+
+      await vault.connect(admin).setDepositFee(0.05 * 1e4);
+      await increase(2 * 7 * 24 * 60 * 60); // 2 weeks
+      await vault.connect(admin).applyFee();
+
+      const operatorInitialBalance = await underlyingAsset.balanceOf(admin.address);
+      const vaultInitialBalance = await underlyingAsset.balanceOf(vault.address);
+
+      // Mint assets to user and deposit
+      await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
+      await underlyingAsset.mint(user2.address, ethers.utils.parseEther("10000"));
+
+      const totalAssets = ethers.utils.parseEther("100"); // Expected to be spent in 1:1 case in exchange for 95 shares
+      const sharesToMint = ethers.utils.parseEther("95"); // As an inverse cases of deposit with fee test
+      const fee = totalAssets.sub(sharesToMint); // 5%
+
+      await underlyingAsset.connect(user1).approve(vault.address, totalAssets);
+      await underlyingAsset.connect(user2).approve(vault.address, totalAssets);
+
+      const initialSharesUser1 = await vault.balanceOf(user1.address);
+      const initialSharesUser2 = await vault.balanceOf(user2.address);
+
+      await vault.connect(user1)["mint(uint256,address)"](sharesToMint, user1.address);
+      await vault.connect(user2)["mint(uint256,address)"](sharesToMint, user2.address);
+
+      const afterSharesUser1 = await vault.balanceOf(user1.address);
+      const afterSharesUser2 = await vault.balanceOf(user2.address);
+
+      // 1:1 rate
+      expect(afterSharesUser1).to.equal(initialSharesUser1.add(sharesToMint));
+      expect(afterSharesUser2).to.equal(initialSharesUser2.add(sharesToMint));
+
+      const operatorAfterBalance = await underlyingAsset.balanceOf(admin.address);
+      const vaultAfterBalance = await underlyingAsset.balanceOf(vault.address);
+
+      expect(vaultAfterBalance).to.equal(vaultInitialBalance.add(sharesToMint.mul(2)));
+      expect(operatorAfterBalance).to.equal(operatorInitialBalance.add(fee).add(fee));
     });
   });
 

@@ -14,13 +14,15 @@ export async function deployUnderlyingVaultFixture() {
   return { underlyingVault, underlyingAsset };
 }
 
-export async function deployVaultFixture() {
+export const deployVaultFixture = async () => deployVaultFixtureCreator();
+
+async function deployVaultFixtureCreator(fee = 0) {
   const { underlyingVault, underlyingAsset } = await deployUnderlyingVaultFixture();
   const { vaultFactory } = await deployVaultFactoryFixture();
   const [, , , admin] = await ethers.getSigners();
 
   let vaultAddress: string = "";
-  const depositFee = 0.3 * 1e4;
+  const depositFee = fee * 1e4;
 
   await expect(
     vaultFactory.create(
