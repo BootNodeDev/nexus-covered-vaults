@@ -1,5 +1,6 @@
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
+import { BigNumber } from "ethers";
 import { ethers } from "hardhat";
 import { deployVaultFixture } from "./utils/fixtures";
 
@@ -422,6 +423,33 @@ describe("CoveredVault", function () {
       await expect(vault.connect(admin).setMaxAssetsLimit(amount))
         .to.emit(vault, "MaxAssetsLimitUpdated")
         .withArgs(amount);
+    });
+  });
+
+  describe("setDepositFee", function () {
+    it("Should revert if not admin", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const fee = BigNumber.from(50 * 1e4);
+
+      await expect(vault.connect(user1).setDepositFee(fee)).to.be.revertedWith(
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${await vault.DEFAULT_ADMIN_ROLE()}`,
+      );
+
+      await expect(vault.connect(admin).setDepositFee(fee));
+    });
+
+    it("Should revert if proposed fee is bigger than 100%", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const fee = BigNumber.from(101 * 1e4);
+
+      await expect(vault.connect(admin).setDepositFee(fee)).to.revertedWithCustomError(
+        vault,
+        "CovererdVault__FeeOutOfBound",
+      );
     });
   });
 });
