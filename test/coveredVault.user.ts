@@ -334,6 +334,9 @@ describe("CoveredVault", function () {
       await increase(2 * 7 * 24 * 60 * 60); // 2 weeks
       await vault.connect(admin).applyFee();
 
+      const depositFee = await vault.depositFee();
+      const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
+
       const operatorInitialBalance = await underlyingAsset.balanceOf(admin.address);
       const vaultInitialBalance = await underlyingAsset.balanceOf(vault.address);
 
@@ -349,17 +352,26 @@ describe("CoveredVault", function () {
       const initialSharesUser1 = await vault.balanceOf(user1.address);
       const initialSharesUser2 = await vault.balanceOf(user2.address);
 
+      const initialAssetsUser1 = await underlyingAsset.balanceOf(user1.address);
+      const initialAssetsUser2 = await underlyingAsset.balanceOf(user2.address);
+
       await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
       await vault.connect(user2)["deposit(uint256,address)"](depositAmount, user2.address);
 
       const firstDepositSharesUser1 = await vault.balanceOf(user1.address);
       const firstDepositSharesUser2 = await vault.balanceOf(user2.address);
 
-      const fee = depositAmount.mul(5).div(100); // 5% of depositAmount
+      const afterDepositAssetsUser1 = await underlyingAsset.balanceOf(user1.address);
+      const afterDepositAssetsUser2 = await underlyingAsset.balanceOf(user2.address);
+
+      const fee = depositAmount.mul(depositFee).div(FEE_DENOMINATOR); // 5% of depositAmount
 
       // 1:1 rate
       expect(firstDepositSharesUser1).to.equal(initialSharesUser1.add(depositAmount.sub(fee)));
       expect(firstDepositSharesUser2).to.equal(initialSharesUser2.add(depositAmount.sub(fee)));
+
+      expect(afterDepositAssetsUser1).to.equal(initialAssetsUser1.sub(depositAmount));
+      expect(afterDepositAssetsUser2).to.equal(initialAssetsUser2.sub(depositAmount));
 
       const operatorAfterBalance = await underlyingAsset.balanceOf(admin.address);
       const vaultAfterBalance = await underlyingAsset.balanceOf(vault.address);
