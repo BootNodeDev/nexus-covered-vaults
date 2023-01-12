@@ -474,6 +474,9 @@ describe("CoveredVault", function () {
       await increase(2 * 7 * 24 * 60 * 60); // 2 weeks
       await vault.connect(admin).applyFee();
 
+      const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
+      const depositFee = await vault.depositFee();
+
       const operatorInitialBalance = await underlyingAsset.balanceOf(admin.address);
       const vaultInitialBalance = await underlyingAsset.balanceOf(vault.address);
 
@@ -481,8 +484,9 @@ describe("CoveredVault", function () {
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
       await underlyingAsset.mint(user2.address, ethers.utils.parseEther("10000"));
 
-      const totalAssets = ethers.utils.parseEther("100"); // Expected to be spent in 1:1 case in exchange for 95 shares
       const sharesToMint = ethers.utils.parseEther("95"); // As an inverse cases of deposit with fee test
+      const totalAssets = sharesToMint.mul(FEE_DENOMINATOR).div(FEE_DENOMINATOR.sub(depositFee)); // Expected to be spent in 1:1 case in exchange for 95 shares
+
       const fee = totalAssets.sub(sharesToMint); // 5%
 
       await underlyingAsset.connect(user1).approve(vault.address, totalAssets);
@@ -491,8 +495,17 @@ describe("CoveredVault", function () {
       const initialSharesUser1 = await vault.balanceOf(user1.address);
       const initialSharesUser2 = await vault.balanceOf(user2.address);
 
+      const initialAssetsUser1 = await underlyingAsset.balanceOf(user1.address);
+      const initialAssetsUser2 = await underlyingAsset.balanceOf(user2.address);
+
       await vault.connect(user1)["mint(uint256,address)"](sharesToMint, user1.address);
       await vault.connect(user2)["mint(uint256,address)"](sharesToMint, user2.address);
+
+      const afterDepositAssetsUser1 = await underlyingAsset.balanceOf(user1.address);
+      const afterDepositAssetsUser2 = await underlyingAsset.balanceOf(user2.address);
+
+      expect(afterDepositAssetsUser1).to.equal(initialAssetsUser1.sub(totalAssets));
+      expect(afterDepositAssetsUser2).to.equal(initialAssetsUser2.sub(totalAssets));
 
       const afterSharesUser1 = await vault.balanceOf(user1.address);
       const afterSharesUser2 = await vault.balanceOf(user2.address);
