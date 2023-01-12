@@ -1,4 +1,5 @@
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
+import { increase } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
 import { expect } from "chai";
 import { BigNumber } from "ethers";
 import { ethers } from "hardhat";
@@ -431,25 +432,120 @@ describe("CoveredVault", function () {
       const { vault } = await loadFixture(deployVaultFixture);
       const [user1, , , admin] = await ethers.getSigners();
 
-      const fee = BigNumber.from(50 * 1e4);
+      const fee = BigNumber.from(0.5 * 1e4);
 
       await expect(vault.connect(user1).setDepositFee(fee)).to.be.revertedWith(
         `AccessControl: account ${user1.address.toLowerCase()} is missing role ${await vault.DEFAULT_ADMIN_ROLE()}`,
       );
 
-      await expect(vault.connect(admin).setDepositFee(fee));
+      await vault.connect(admin).setDepositFee(fee);
     });
 
     it("Should revert if proposed fee is bigger than 100%", async function () {
       const { vault } = await loadFixture(deployVaultFixture);
       const [, , , admin] = await ethers.getSigners();
 
-      const fee = BigNumber.from(101 * 1e4);
+      const fee = BigNumber.from(1.1 * 1e4);
 
       await expect(vault.connect(admin).setDepositFee(fee)).to.revertedWithCustomError(
         vault,
         "CovererdVault__FeeOutOfBound",
       );
+    });
+  });
+
+  describe("applyFee", function () {
+    it("Should revert if not admin", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const fee = BigNumber.from(0.3 * 1e4);
+      const timeLock = await vault.FEE_TIME_LOCK();
+
+      await vault.connect(admin).setDepositFee(fee);
+
+      await increase(timeLock);
+      await expect(vault.connect(user1).applyFee()).to.be.revertedWith(
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${await vault.DEFAULT_ADMIN_ROLE()}`,
+      );
+
+      await vault.connect(admin).applyFee();
+    });
+
+    it("Should revert if no proposed fee is found", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      await expect(vault.connect(admin).applyFee()).to.revertedWithCustomError(
+        vault,
+        "CovererdVault__FeeProposalNotFound",
+      );
+    });
+
+    it("Should revert after apply was called once", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const fee = BigNumber.from(0.3 * 1e4);
+      const timeLock = await vault.FEE_TIME_LOCK();
+
+      await vault.connect(admin).setDepositFee(fee);
+
+      await increase(timeLock);
+      await vault.connect(admin).applyFee();
+      await expect(vault.connect(admin).applyFee()).to.revertedWithCustomError(
+        vault,
+        "CovererdVault__FeeProposalNotFound",
+      );
+    });
+
+    it("Should revert if deadline is not due", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const fee = BigNumber.from(0.3 * 1e4);
+      const timeLock = await vault.FEE_TIME_LOCK();
+
+      await vault.connect(admin).setDepositFee(fee);
+
+      await increase(timeLock.sub("60"));
+      await expect(vault.connect(admin).applyFee()).to.revertedWithCustomError(
+        vault,
+        "CovererdVault__FeeTimeLockNotDue",
+      );
+
+      await increase(BigNumber.from("60"));
+      await vault.connect(admin).applyFee();
+    });
+
+    it("Should change fee and reset proposed fee", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const fee = BigNumber.from(0.3 * 1e4);
+      const timeLock = await vault.FEE_TIME_LOCK();
+
+      const depositFeeBeforeSet = await vault.depositFee();
+      await vault.connect(admin).setDepositFee(fee);
+
+      expect(depositFeeBeforeSet).to.be.equal("0");
+
+      const [_proposedDeadline, proposedFee] = await vault.proposedDepositFee();
+      // TODO expect(proposedDeadline).to.be.eq(BigNumber.from(now));
+      expect(proposedFee).to.be.eq(fee);
+
+      const depositFeeAfterSet = await vault.depositFee();
+      expect(depositFeeAfterSet).to.be.equal("0");
+
+      await increase(timeLock);
+      await vault.connect(admin).applyFee();
+
+      const depositFeeAfterApply = await vault.depositFee();
+      expect(depositFeeAfterApply).to.be.equal(fee);
+
+      const [resetDeadline, resetFee] = await vault.proposedDepositFee();
+      expect(resetFee).to.be.eq("0");
+      expect(resetDeadline).to.be.eq("0");
     });
   });
 });
