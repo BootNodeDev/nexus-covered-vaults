@@ -17,7 +17,7 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 contract CoveredVault is SafeERC4626, AccessManager {
   /** @dev Data related to a deposit fee change */
   struct ProposedDepositFee {
-    uint256 requestedOnTimestamp;
+    uint256 deadline;
     uint256 newFee;
   }
 
@@ -208,16 +208,15 @@ contract CoveredVault is SafeERC4626, AccessManager {
     if (_depositFee > FEE_DENOMINATOR) revert CovererdVault__FeeOutOfBound();
 
     proposedDepositFee.newFee = _depositFee;
-    proposedDepositFee.requestedOnTimestamp = block.timestamp;
+    proposedDepositFee.deadline = block.timestamp + FEE_TIME_LOCK;
   }
 
   /**
    * @dev Sets the depositFee to his pending value if FEE_TIME_LOCK has passed.
    */
   function applyFee() external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (proposedDepositFee.requestedOnTimestamp == 0) revert CovererdVault__FeeProposalNotFound();
-    if (block.timestamp < proposedDepositFee.requestedOnTimestamp + FEE_TIME_LOCK)
-      revert CovererdVault__FeeTimeLockNotDue();
+    if (proposedDepositFee.deadline == 0) revert CovererdVault__FeeProposalNotFound();
+    if (block.timestamp < proposedDepositFee.deadline) revert CovererdVault__FeeTimeLockNotDue();
 
     depositFee = proposedDepositFee.newFee;
     delete proposedDepositFee;
