@@ -139,12 +139,12 @@ contract CoveredVault is SafeERC4626, AccessManager {
   }
 
   /** @dev Get depositFee % of _assets */
-  function _calculateFee(uint256 _assets) private view returns (uint256) {
+  function _calculateFee(uint256 _assets) internal view returns (uint256) {
     return (_assets * depositFee) / FEE_DENOMINATOR;
   }
 
   /** @dev Transfer underlyingAsset amount of _fee to operator */
-  function _transferFees(uint256 _fee) private returns (bool) {
+  function _transferFees(uint256 _fee) internal returns (bool) {
     return IERC20(asset()).transfer(getRoleMember(DEFAULT_ADMIN_ROLE, 0), _fee);
   }
 
