@@ -123,14 +123,7 @@ contract CoveredVault is SafeERC4626, AccessManager {
     (uint256 maxAvailableMint, uint256 vaultTotalAssets) = _maxMint(_receiver);
     if (_shares > maxAvailableMint) revert BaseERC4626__MintMoreThanMax();
 
-    // shares = assets - assets*fee%
-    // shares = assets * (1-fee%)
-    // assets = shares / (1-fee%)
-    uint256 assets = _convertToAssets(
-      (_shares * FEE_DENOMINATOR) / (FEE_DENOMINATOR - depositFee),
-      Math.Rounding.Up,
-      vaultTotalAssets
-    );
+    uint256 assets = _convertToAssets(_calculateSharesAfterFee(_shares), Math.Rounding.Up, vaultTotalAssets);
 
     _deposit(_msgSender(), _receiver, assets, _shares);
     _transferFees(_calculateFee(assets));
@@ -138,9 +131,30 @@ contract CoveredVault is SafeERC4626, AccessManager {
     return assets;
   }
 
+  /** @dev See {IERC4626-previewDeposit}. */
+  function previewDeposit(uint256 assets) public view override returns (uint256) {
+    uint256 fee = _calculateFee(assets);
+    return _convertToShares(assets - fee, Math.Rounding.Down, false);
+  }
+
+  /** @dev See {IERC4626-previewMint}. */
+  function previewMint(uint256 shares) public view override returns (uint256) {
+    uint256 sharesAfterFee = _calculateSharesAfterFee(shares);
+
+    return _convertToAssets(sharesAfterFee, Math.Rounding.Up, false);
+  }
+
   /** @dev Get depositFee % of _assets */
   function _calculateFee(uint256 _assets) internal view returns (uint256) {
     return (_assets * depositFee) / FEE_DENOMINATOR;
+  }
+
+  /** @dev Get shares amount taking into account fee% */
+  function _calculateSharesAfterFee(uint256 _shares) internal view returns (uint256) {
+    // shares = assets - assets*fee%
+    // shares = assets * (1-fee%)
+    // assets = shares / (1-fee%)
+    return (_shares * FEE_DENOMINATOR) / (FEE_DENOMINATOR - depositFee);
   }
 
   /** @dev Transfer underlyingAsset amount of _fee to operator */

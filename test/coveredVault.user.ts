@@ -147,6 +147,51 @@ describe("CoveredVault", function () {
     });
   });
 
+  describe("previewDeposit with fee", function () {
+    xit("Should account for assets in the underlying vault", async function () {
+      const { vault, underlyingVault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      await vault.connect(admin).setDepositFee(0.05 * 1e4);
+      await increase(2 * 7 * 24 * 60 * 60); // 2 weeks
+      await vault.connect(admin).applyFee();
+
+      const fee = await vault.depositFee();
+      const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
+
+      // Mint assets to user and deposit
+      await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
+      await underlyingAsset.connect(user1).approve(vault.address, ethers.utils.parseEther("1000"));
+      await vault.connect(user1)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), user1.address);
+
+      const depositAssets = ethers.utils.parseEther("1000");
+
+      const depositAssetsWithFee = depositAssets.sub(depositAssets.mul(fee).div(FEE_DENOMINATOR));
+
+      // 1:1 rate
+      expect(await vault.previewDeposit(depositAssets)).to.equal(depositAssetsWithFee);
+
+      // Mint assets to vault with the same amount as previous deposit after fee to maintain an easy ratio
+      await underlyingAsset.mint(vault.address, depositAssetsWithFee);
+
+      // 1:2 rate
+      expect(await vault.previewDeposit(depositAssets)).to.equal(depositAssetsWithFee.div(2));
+
+      // Deposit assets into underlying vault to the vault account
+      await underlyingAsset.connect(user1).approve(underlyingVault.address, ethers.utils.parseEther("1000"));
+      await underlyingVault.connect(user1).deposit(depositAssets, vault.address);
+
+      // 1:3 rate
+      expect(await vault.previewDeposit(depositAssets)).to.equal(depositAssetsWithFee.div(3));
+
+      // Mint assets to underlying vault
+      await underlyingAsset.mint(underlyingVault.address, depositAssetsWithFee.div(2));
+
+      // TODO 1:4
+      //expect(await vault.previewDeposit(depositAssets)).to.equal(depositAssetsWithFee.div(2));
+    });
+  });
+
   describe("maxDeposit", function () {
     it("Should account for max asset limit and total assets", async function () {
       const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
@@ -209,6 +254,51 @@ describe("CoveredVault", function () {
 
       // 1:4 rate
       expect(await vault.previewMint(mintShares)).to.equal(mintShares.mul(4));
+    });
+  });
+
+  describe("previewMint with fee", function () {
+    xit("Should account for assets in the underlying vault", async function () {
+      const { vault, underlyingVault: _underlyingVault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      await vault.connect(admin).setDepositFee(0.05 * 1e4);
+      await increase(2 * 7 * 24 * 60 * 60); // 2 weeks
+      await vault.connect(admin).applyFee();
+
+      const fee = await vault.depositFee();
+      const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
+
+      // Mint assets to user and deposit
+      await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
+      await underlyingAsset.connect(user1).approve(vault.address, ethers.utils.parseEther("1000"));
+      await vault.connect(user1)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), user1.address);
+
+      const mintShares = ethers.utils.parseEther("1000");
+
+      // 1:1 rate
+      expect(await vault.previewMint(mintShares)).to.equal(
+        mintShares.mul(FEE_DENOMINATOR).div(FEE_DENOMINATOR.sub(fee)),
+      );
+
+      // // Mint assets to vault
+      // await underlyingAsset.mint(vault.address, ethers.utils.parseEther("1000"));
+
+      // // 1:2 rate
+      // expect(await vault.previewMint(mintShares)).to.equal(mintShares.mul(2));
+
+      // // Deposit assets into underlying vault to the vault account
+      // await underlyingAsset.connect(user1).approve(underlyingVault.address, ethers.utils.parseEther("1000"));
+      // await underlyingVault.connect(user1).deposit(ethers.utils.parseEther("1000"), vault.address);
+
+      // // 1:3 rate
+      // expect(await vault.previewMint(mintShares)).to.equal(mintShares.mul(3));
+
+      // // Mint assets to underlying vault
+      // await underlyingAsset.mint(underlyingVault.address, ethers.utils.parseEther("1000"));
+
+      // // 1:4 rate
+      // expect(await vault.previewMint(mintShares)).to.equal(mintShares.mul(4));
     });
   });
 

@@ -55,16 +55,6 @@ abstract contract BaseERC4626 is ERC4626, ERC20Permit {
     return _convertToAssets(shares, Math.Rounding.Down, false);
   }
 
-  /** @dev See {IERC4626-previewDeposit}. */
-  function previewDeposit(uint256 assets) public view override returns (uint256) {
-    return _convertToShares(assets, Math.Rounding.Down, false);
-  }
-
-  /** @dev See {IERC4626-previewMint}. */
-  function previewMint(uint256 shares) public view override returns (uint256) {
-    return _convertToAssets(shares, Math.Rounding.Up, false);
-  }
-
   /** @dev See {IERC4626-previewWithdraw}. */
   function previewWithdraw(uint256 assets) public view override returns (uint256) {
     return _convertToShares(assets, Math.Rounding.Up, true);
