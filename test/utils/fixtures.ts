@@ -43,6 +43,20 @@ export async function deployVaultFactoryFixture() {
   return { vaultFactory };
 }
 
+export async function deployCoverManager() {
+  const CoverManager = await ethers.getContractFactory("CoverManager");
+  const CoverMock = await ethers.getContractFactory("CoverMock");
+  const YieldTokenIncidentsMock = await ethers.getContractFactory("YieldTokenIncidentsMock");
+  const [, , , , kycUser] = await ethers.getSigners();
+
+  const cover = await CoverMock.deploy();
+  const yieldTokenIncidents = await YieldTokenIncidentsMock.deploy();
+
+  const coverManager = await CoverManager.connect(kycUser).deploy(cover.address, yieldTokenIncidents.address);
+
+  return { coverManager, cover, yieldTokenIncidents };
+}
+
 export async function mintVaultSharesFixture() {
   const { vault, underlyingVault, underlyingAsset } = await deployVaultFixture();
   const [user1, user2] = await ethers.getSigners();

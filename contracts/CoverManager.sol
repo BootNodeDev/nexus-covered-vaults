@@ -5,7 +5,7 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title CoverManager
- * @dev Contract allowed to interact with Nexus Mutual on behalf of whitelisted CoveredVaults
+ * @dev Contract allowed to interact with Nexus Mutual on behalf of allowed CoveredVaults
  */
 contract CoverManager is Ownable {
   address public coverContract;
@@ -38,7 +38,7 @@ contract CoverManager is Ownable {
    * @dev Allow a CoveredVault to call methods in this contract
    * @param _toAllow Address to allow calling methods
    */
-  function addToWhitelist(address _toAllow) external onlyOwner {
+  function allowCaller(address _toAllow) external onlyOwner {
     if (isAllowed[_toAllow]) {
       revert AlreadyAllowed();
     }
@@ -50,7 +50,7 @@ contract CoverManager is Ownable {
    * @dev Remove permission of a CoveredVault to call methods in this contract
    * @param _toDisallow Address to reject calling methods
    */
-  function removeFromWhitelist(address _toDisallow) external onlyOwner {
+  function disallowCaller(address _toDisallow) external onlyOwner {
     if (!isAllowed[_toDisallow]) {
       revert AlreadyDisallowed();
     }
