@@ -47,12 +47,19 @@ export async function deployCoverManager() {
   const CoverManager = await ethers.getContractFactory("CoverManager");
   const CoverMock = await ethers.getContractFactory("CoverMock");
   const YieldTokenIncidentsMock = await ethers.getContractFactory("YieldTokenIncidentsMock");
+  const PoolMock = await ethers.getContractFactory("PoolMock");
+
   const [, , , , kycUser] = await ethers.getSigners();
 
   const cover = await CoverMock.deploy();
   const yieldTokenIncidents = await YieldTokenIncidentsMock.deploy();
+  const pool = await PoolMock.deploy();
 
-  const coverManager = await CoverManager.connect(kycUser).deploy(cover.address, yieldTokenIncidents.address);
+  const coverManager = await CoverManager.connect(kycUser).deploy(
+    cover.address,
+    yieldTokenIncidents.address,
+    pool.address,
+  );
 
   return { coverManager, cover, yieldTokenIncidents };
 }
