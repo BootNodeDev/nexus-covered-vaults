@@ -67,4 +67,10 @@ describe("CoverManager", function () {
       );
     });
   });
+
+  describe("Buy Cover", function () {
+    it("Should revert if is called with and ERC20 and ETH", () => {
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+    });
+  });
 });

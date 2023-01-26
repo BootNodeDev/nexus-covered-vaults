@@ -2,6 +2,7 @@
 pragma solidity 0.8.17;
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import { ICover, BuyCoverParams, PoolAllocationRequest } from "./interfaces/ICover.sol";
@@ -25,6 +26,7 @@ contract CoverManager is Ownable {
   error AlreadyAllowed();
   error AlreadyDisallowed();
   error SendingEthFailed();
+  error EthNotExpected();
 
   modifier onlyAllowed() {
     if (!isAllowed[msg.sender]) {
@@ -70,9 +72,46 @@ contract CoverManager is Ownable {
     emit Disallowed(_toDisallow);
   }
 
+  // function buyCover(BuyCoverParams calldata params, PoolAllocationRequest[] calldata coverChunkRequests)
+  //   external
+  //   payable
+  //   onlyAllowed
+  //   returns (uint256 coverId)
+  // {
+  //   bool isETH = params.paymentAsset == 0;
+
+  //   if (isETH) {
+  //     uint256 initialBalance = address(this).balance - msg.value;
+
+  //     coverId = ICover(coverContract).buyCover{ value: msg.value }(params, coverChunkRequests);
+
+  //     uint256 finalBalance = address(this).balance;
+
+  //     // solhint-disable-next-line avoid-low-level-calls
+  //     (bool success, ) = address(msg.sender).call{ value: finalBalance - initialBalance }("");
+  //     if (!success) {
+  //       revert SendingEthFailed();
+  //     }
+  //   } else {
+  //     (address asset, ) = IPool(pool).coverAssets(params.paymentAsset);
+  //     uint256 initialBalance = IERC20(asset).balanceOf(address(this));
+
+  //     IERC20(asset).transferFrom(msg.sender, address(this), params.maxPremiumInAsset);
+
+  //     coverId = ICover(coverContract).buyCover{ value: msg.value }(params, coverChunkRequests);
+
+  //     uint256 finalBalance = IERC20(asset).balanceOf(address(this));
+
+  //     IERC20(asset).transferFrom(address(this), msg.sender, finalBalance - initialBalance);
+  //   }
+
+  //   return coverId;
+  // }
+
   /**
-   * @dev
-   * @param
+   * @dev buyCover as CoverManager, member of Nexus
+   * @param params parameters to call buyCover
+   * @param coverChunkRequests Data for each poolId
    */
   function buyCover(BuyCoverParams calldata params, PoolAllocationRequest[] calldata coverChunkRequests)
     external
@@ -80,70 +119,30 @@ contract CoverManager is Ownable {
     onlyAllowed
     returns (uint256 coverId)
   {
-    bool isETH = params.paymentAsset == 0;
-
-    if (isETH) {
-      uint256 initialBalance = address(this).balance;
-
-      // TODO Send ETH to this?
-      // IERC20(asset).transferFrom(msg.sender, address(this), params.maxPremiumInAsset);
-
-      coverId = ICover(coverContract).buyCover{ value: msg.value }(params, coverChunkRequests);
-
-      uint256 finalBalance = address(this).balance;
-
-      (bool success, ) = address(msg.sender).call{ value: finalBalance - initialBalance }("");
-      if (!success) {
-        revert SendingEthFailed();
-      }
-    } else {
-      (address asset, ) = IPool(pool).coverAssets(params.paymentAsset);
-      uint256 initialBalance = IERC20(asset).balanceOf(address(this));
-
-      IERC20(asset).transferFrom(msg.sender, address(this), params.maxPremiumInAsset);
-
-      coverId = ICover(coverContract).buyCover{ value: msg.value }(params, coverChunkRequests);
-
-      uint256 finalBalance = IERC20(asset).balanceOf(address(this));
-
-      IERC20(asset).transferFrom(address(this), msg.sender, finalBalance - initialBalance);
-    }
-
-    return coverId;
-  }
-
-  /**
-   * @dev
-   * @param
-   */
-  function buyCover2(BuyCoverParams calldata params, PoolAllocationRequest[] calldata coverChunkRequests)
-    external
-    payable
-    onlyAllowed
-    returns (uint256 coverId)
-  {
-    bool isETH = params.paymentAsset == 0;
     uint256 initialBalance;
     uint256 finalBalance;
 
-    (address asset, ) = IPool(pool).coverAssets(params.paymentAsset);
+    bool isETH = params.paymentAsset == 0;
+    if (!isETH && msg.value != 0) {
+      revert EthNotExpected();
+    }
 
-    initialBalance = isETH ? address(this).balance : IERC20(asset).balanceOf(address(this));
+    address asset = IPool(pool).getAsset(params.paymentAsset).assetAddress;
 
-    // TODO Check what to do in isETH case
-    // IERC20(asset).transferFrom(msg.sender, address(this), params.maxPremiumInAsset);
+    initialBalance = isETH ? address(this).balance - msg.value : IERC20(asset).balanceOf(address(this));
 
     coverId = ICover(coverContract).buyCover{ value: msg.value }(params, coverChunkRequests);
 
     finalBalance = isETH ? address(this).balance : IERC20(asset).balanceOf(address(this));
 
     if (isETH) {
+      // solhint-disable-next-line avoid-low-level-calls
       (bool success, ) = address(msg.sender).call{ value: finalBalance - initialBalance }("");
       if (!success) {
         revert SendingEthFailed();
       }
     } else {
-      IERC20(asset).transferFrom(address(this), msg.sender, finalBalance - initialBalance);
+      SafeERC20.safeTransfer(IERC20(asset), msg.sender, finalBalance - initialBalance);
     }
 
     return coverId;
