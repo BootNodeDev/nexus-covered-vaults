@@ -135,6 +135,7 @@ contract CoverManager is Ownable {
 
     finalBalance = isETH ? address(this).balance : IERC20(asset).balanceOf(address(this));
 
+    // Not spent ETH/Asset is returned to buyer
     if (isETH) {
       // solhint-disable-next-line avoid-low-level-calls
       (bool success, ) = address(msg.sender).call{ value: finalBalance - initialBalance }("");
