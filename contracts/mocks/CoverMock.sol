@@ -12,28 +12,38 @@ contract CoverMock {
   uint256 public premium = 1e4;
   uint256 public coverId = 1;
 
+  error MaxPremiumSetToHigh();
+  error PremiumAmountHigherThanMaxPremium();
+  error EthSendFailed();
+
   constructor(address _pool) {
     pool = _pool;
   }
 
   function setPremium(uint256 _premium) public {
-    require(_premium <= PREMIUM_DENOMINATOR, "Premium exceeds 100%");
+    if (_premium > PREMIUM_DENOMINATOR) revert MaxPremiumSetToHigh();
     premium = _premium;
   }
 
   function buyCover(
     BuyCoverParams calldata params /*, PoolAllocationRequest[] calldata coverChunkRequests */
   ) external payable returns (uint256) {
-    bool isETH = params.paymentAsset == 0;
-    uint256 amountToPay = params.amount + ((params.amount * premium) / PREMIUM_DENOMINATOR);
-    // TODO Check uint256 maxPremium = params.maxPremiumInAsset;
+    uint256 premiumAmount = ((params.amount * premium) / PREMIUM_DENOMINATOR);
+    uint256 amountToPay = params.amount + premiumAmount;
+    if (premiumAmount > params.maxPremiumInAsset) {
+      revert PremiumAmountHigherThanMaxPremium();
+    }
 
     address asset = IPool(pool).getAsset(params.paymentAsset).assetAddress;
 
+    bool isETH = params.paymentAsset == 0;
     if (isETH) {
-      // solhint-disable-next-line avoid-low-level-calls
-      (bool success, ) = address(msg.sender).call{ value: msg.value - amountToPay }("");
-      require(success, "ETH Send failed");
+      uint256 remaining = msg.value - amountToPay;
+      if (remaining > 0) {
+        // solhint-disable-next-line avoid-low-level-calls
+        (bool success, ) = address(msg.sender).call{ value: msg.value - amountToPay }("");
+        if (!success) revert EthSendFailed();
+      }
     } else {
       SafeERC20.safeTransferFrom(IERC20(asset), msg.sender, address(this), amountToPay);
     }
