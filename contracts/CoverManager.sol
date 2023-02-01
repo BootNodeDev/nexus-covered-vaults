@@ -123,6 +123,7 @@ contract CoverManager is Ownable {
     uint256 finalBalance;
 
     bool isETH = params.paymentAsset == 0;
+
     if (!isETH && msg.value != 0) {
       revert EthNotExpected();
     }
@@ -137,16 +138,16 @@ contract CoverManager is Ownable {
 
     uint256 remaining = finalBalance - initialBalance;
     // Not spent ETH/Asset is returned to buyer
-    if (isETH) {
-      if (remaining > 0) {
+    if (remaining > 0) {
+      if (isETH) {
         // solhint-disable-next-line avoid-low-level-calls
         (bool success, ) = address(msg.sender).call{ value: remaining }("");
         if (!success) {
           revert SendingEthFailed();
         }
+      } else {
+        SafeERC20.safeTransfer(IERC20(asset), msg.sender, remaining);
       }
-    } else {
-      SafeERC20.safeTransfer(IERC20(asset), msg.sender, remaining);
     }
 
     return coverId;

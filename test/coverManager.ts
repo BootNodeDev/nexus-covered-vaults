@@ -3,6 +3,26 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { deployCoverManager } from "./utils/fixtures";
 
+const poolAlloc = {
+  poolId: 0,
+  skip: false,
+  coverAmountInAsset: ethers.utils.parseEther("10"),
+};
+
+const buyCoverParams = {
+  coverId: 0,
+  owner: ethers.constants.AddressZero, // replace
+  productId: 1,
+  coverAsset: 0,
+  amount: ethers.utils.parseEther("10"),
+  period: 0,
+  maxPremiumInAsset: ethers.utils.parseEther("1"),
+  paymentAsset: ethers.constants.AddressZero, // replace
+  commissionRatio: 0,
+  commissionDestination: ethers.constants.AddressZero,
+  ipfsData: "",
+};
+
 describe("CoverManager", function () {
   describe("Deployment", function () {
     it("Should correctly set params", async function () {
@@ -68,8 +88,43 @@ describe("CoverManager", function () {
     });
   });
 
-  describe("Buy Cover", function () {
-    it("Should revert if is called with and ERC20 and ETH", () => {
+  describe.only("Buy Cover", function () {
+    it("Should revert if is called with and ERC20 and ETH", async () => {
+      const { coverManager } = await loadFixture(deployCoverManager);
+      const [user1, , , , kycUser] = await ethers.getSigners();
+
+      await coverManager.connect(kycUser).allowCaller(user1.address);
+      await expect(
+        coverManager
+          .connect(user1)
+          .buyCover({ ...buyCoverParams, paymentAsset: 1 }, [poolAlloc], { value: buyCoverParams.amount }),
+      ).to.be.revertedWithCustomError(coverManager, "EthNotExpected");
+
+      await expect(
+        coverManager
+          .connect(user1)
+          .buyCover({ ...buyCoverParams, paymentAsset: 0 }, [poolAlloc], { value: buyCoverParams.amount }),
+      ).to.not.be.reverted;
+    });
+
+    it.only("Should return to sender amount not spent in ETH", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      const { coverManager } = await loadFixture(deployCoverManager);
+      const [user1, , , , kycUser] = await ethers.getSigners();
+
+      await coverManager.connect(kycUser).allowCaller(user1.address);
+
+      const balanceBefore = await user1.getBalance();
+      await coverManager
+        .connect(user1)
+        .buyCover({ ...buyCoverParams, paymentAsset: 0 }, [poolAlloc], { value: buyCoverParams.amount.mul(2) });
+      const balanceAfter = await user1.getBalance();
+
+      expect(balanceBefore).to.be.gt("0");
+      expect(balanceAfter).to.be.gt("0");
+    });
+
+    xit("Should return to sender amount not spent in asset", () => {
       // eslint-disable-next-line @typescript-eslint/no-empty-function
     });
   });

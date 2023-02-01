@@ -9,7 +9,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 contract CoverMock {
   address public pool;
   uint256 public constant PREMIUM_DENOMINATOR = 1e4;
-  uint256 public premium = 1e4;
+  uint256 public premium = 100; // 1%
   uint256 public coverId = 1;
 
   error MaxPremiumSetToHigh();
@@ -25,9 +25,11 @@ contract CoverMock {
     premium = _premium;
   }
 
-  function buyCover(
-    BuyCoverParams calldata params /*, PoolAllocationRequest[] calldata coverChunkRequests */
-  ) external payable returns (uint256) {
+  function buyCover(BuyCoverParams calldata params, PoolAllocationRequest[] calldata coverChunkRequests)
+    external
+    payable
+    returns (uint256)
+  {
     uint256 premiumAmount = ((params.amount * premium) / PREMIUM_DENOMINATOR);
     uint256 amountToPay = params.amount + premiumAmount;
     if (premiumAmount > params.maxPremiumInAsset) {
@@ -37,15 +39,19 @@ contract CoverMock {
     address asset = IPool(pool).getAsset(params.paymentAsset).assetAddress;
 
     bool isETH = params.paymentAsset == 0;
+
     if (isETH) {
-      uint256 remaining = msg.value - amountToPay;
+      uint256 remaining = msg.value > amountToPay ? msg.value - amountToPay : 0;
+      // solhint-disable-next-line avoid-low-level-calls
       if (remaining > 0) {
-        // solhint-disable-next-line avoid-low-level-calls
-        (bool success, ) = address(msg.sender).call{ value: msg.value - amountToPay }("");
+        (bool success, ) = address(msg.sender).call{ value: remaining }("");
         if (!success) revert EthSendFailed();
       }
     } else {
-      SafeERC20.safeTransferFrom(IERC20(asset), msg.sender, address(this), amountToPay);
+      uint256 remaining = params.amount > amountToPay ? params.amount - amountToPay : 0;
+      if (remaining > 0) {
+        SafeERC20.safeTransferFrom(IERC20(asset), msg.sender, address(this), remaining);
+      }
     }
 
     return (params.coverId == 0) ? ++coverId : params.coverId;
