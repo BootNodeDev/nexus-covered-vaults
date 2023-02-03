@@ -42,15 +42,18 @@ contract CoverMock {
 
     if (isETH) {
       uint256 remaining = msg.value > amountToPay ? msg.value - amountToPay : 0;
-      // solhint-disable-next-line avoid-low-level-calls
       if (remaining > 0) {
+        // solhint-disable-next-line avoid-low-level-calls
         (bool success, ) = address(msg.sender).call{ value: remaining }("");
         if (!success) revert EthSendFailed();
       }
     } else {
-      uint256 remaining = params.amount > amountToPay ? params.amount - amountToPay : 0;
+      uint256 maxAmountToPay = params.maxPremiumInAsset + params.amount;
+      SafeERC20.safeTransferFrom(IERC20(asset), msg.sender, address(this), amountToPay);
+
+      uint256 remaining = maxAmountToPay - amountToPay;
       if (remaining > 0) {
-        SafeERC20.safeTransferFrom(IERC20(asset), msg.sender, address(this), remaining);
+        SafeERC20.safeTransfer(IERC20(asset), msg.sender, remaining);
       }
     }
 

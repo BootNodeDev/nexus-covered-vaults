@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 const vaultName = "USDC Covered Vault";
 const vaultSymbol = "cvUSDC";
@@ -44,14 +45,17 @@ export async function deployVaultFactoryFixture() {
 }
 
 export async function deployCoverManager() {
+  const ERC20Mock = await ethers.getContractFactory("ERC20Mock");
+  const underlyingAsset = await ERC20Mock.deploy("DAI", "DAI");
   const CoverManager = await ethers.getContractFactory("CoverManager");
   const CoverMock = await ethers.getContractFactory("CoverMock");
   const YieldTokenIncidentsMock = await ethers.getContractFactory("YieldTokenIncidentsMock");
+
   const PoolMock = await ethers.getContractFactory("PoolMock");
 
   const [, , , , kycUser] = await ethers.getSigners();
 
-  const pool = await PoolMock.deploy();
+  const pool = await PoolMock.deploy(underlyingAsset.address);
   const cover = await CoverMock.deploy(pool.address);
   const yieldTokenIncidents = await YieldTokenIncidentsMock.deploy();
 
@@ -61,7 +65,10 @@ export async function deployCoverManager() {
     pool.address,
   );
 
-  return { coverManager, cover, yieldTokenIncidents };
+  await setBalance(coverManager.address, ethers.utils.parseEther("1000"));
+  await setBalance(cover.address, ethers.utils.parseEther("1000"));
+
+  return { coverManager, cover, yieldTokenIncidents, underlyingAsset };
 }
 
 export async function mintVaultSharesFixture() {

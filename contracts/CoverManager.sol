@@ -132,12 +132,17 @@ contract CoverManager is Ownable {
 
     initialBalance = isETH ? address(this).balance - msg.value : IERC20(asset).balanceOf(address(this));
 
+    if (!isETH) {
+      IERC20(asset).transferFrom(msg.sender, address(this), params.amount + params.maxPremiumInAsset);
+      IERC20(asset).approve(coverContract, params.amount + params.maxPremiumInAsset); // TODO Control this
+    }
+
     coverId = ICover(coverContract).buyCover{ value: msg.value }(params, coverChunkRequests);
 
     finalBalance = isETH ? address(this).balance : IERC20(asset).balanceOf(address(this));
 
     uint256 remaining = finalBalance - initialBalance;
-    // Not spent ETH/Asset is returned to buyer
+    // ETH/Asset unspent is returned to buyer
     if (remaining > 0) {
       if (isETH) {
         // solhint-disable-next-line avoid-low-level-calls
@@ -152,4 +157,6 @@ contract CoverManager is Ownable {
 
     return coverId;
   }
+
+  receive() external payable {}
 }

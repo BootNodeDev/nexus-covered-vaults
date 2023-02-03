@@ -2,6 +2,7 @@ import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { deployCoverManager } from "./utils/fixtures";
+import { setNextBlockBaseFeePerGas } from "@nomicfoundation/hardhat-network-helpers";
 
 const poolAlloc = {
   poolId: 0,
@@ -88,7 +89,7 @@ describe("CoverManager", function () {
     });
   });
 
-  describe.only("Buy Cover", function () {
+  describe("Buy Cover", function () {
     it("Should revert if is called with and ERC20 and ETH", async () => {
       const { coverManager } = await loadFixture(deployCoverManager);
       const [user1, , , , kycUser] = await ethers.getSigners();
@@ -107,25 +108,52 @@ describe("CoverManager", function () {
       ).to.not.be.reverted;
     });
 
-    it.only("Should return to sender amount not spent in ETH", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
-      const { coverManager } = await loadFixture(deployCoverManager);
+    it("Should return to sender amount not spent in ETH", async () => {
+      const { coverManager, cover } = await loadFixture(deployCoverManager);
       const [user1, , , , kycUser] = await ethers.getSigners();
 
       await coverManager.connect(kycUser).allowCaller(user1.address);
 
       const balanceBefore = await user1.getBalance();
-      await coverManager
-        .connect(user1)
-        .buyCover({ ...buyCoverParams, paymentAsset: 0 }, [poolAlloc], { value: buyCoverParams.amount.mul(2) });
-      const balanceAfter = await user1.getBalance();
 
-      expect(balanceBefore).to.be.gt("0");
-      expect(balanceAfter).to.be.gt("0");
+      await setNextBlockBaseFeePerGas(0);
+      await coverManager.connect(user1).buyCover({ ...buyCoverParams, paymentAsset: 0 }, [poolAlloc], {
+        value: buyCoverParams.amount.mul(2),
+        gasPrice: 0,
+      });
+
+      const balanceAfter = await user1.getBalance();
+      const premium = await cover.premium();
+      const PREMIUM_DENOMINATOR = await cover.PREMIUM_DENOMINATOR();
+      const premiumAmount = buyCoverParams.amount.mul(premium).div(PREMIUM_DENOMINATOR);
+
+      expect(balanceAfter).to.be.eq(balanceBefore.sub(buyCoverParams.amount).sub(premiumAmount));
     });
 
-    xit("Should return to sender amount not spent in asset", () => {
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
+    it.only("Should return to sender amount not spent in asset", async () => {
+      const { coverManager, cover, underlyingAsset } = await loadFixture(deployCoverManager);
+      const [user1, , , , kycUser] = await ethers.getSigners();
+
+      await coverManager.connect(kycUser).allowCaller(user1.address);
+      await underlyingAsset.mint(user1.address, ethers.utils.parseEther("10000"));
+      await underlyingAsset.connect(user1).approve(coverManager.address, ethers.utils.parseEther("10000"));
+
+      const balanceBefore = await underlyingAsset.balanceOf(user1.address);
+
+      await setNextBlockBaseFeePerGas(0);
+      await coverManager.connect(user1).buyCover({ ...buyCoverParams, paymentAsset: 1 }, [poolAlloc], {
+        value: 0,
+        gasPrice: 0,
+      });
+
+      const balanceAfter = await underlyingAsset.balanceOf(user1.address);
+
+      const premium = await cover.premium();
+      const PREMIUM_DENOMINATOR = await cover.PREMIUM_DENOMINATOR();
+      const premiumAmount = buyCoverParams.amount.mul(premium).div(PREMIUM_DENOMINATOR);
+
+      console.log(ethers.utils.formatEther(balanceBefore.sub(balanceAfter)));
+      expect(balanceAfter).to.be.eq(balanceBefore.sub(buyCoverParams.amount).sub(premiumAmount));
     });
   });
 });
