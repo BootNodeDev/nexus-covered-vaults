@@ -18,7 +18,6 @@ contract CoverManager is Ownable {
   event Allowed(address indexed account);
   event Disallowed(address indexed account);
 
-
   /* ========== Custom Errors ========== */
 
   error CoverManager_NotAllowed();

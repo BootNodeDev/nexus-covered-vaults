@@ -23,11 +23,7 @@ abstract contract SafeERC4626 is BaseERC4626 {
    * @param _name Name of the vault
    * @param _symbol Symbol of the vault
    */
-  constructor(
-    IERC20 _asset,
-    string memory _name,
-    string memory _symbol
-  ) BaseERC4626(_asset, _name, _symbol) {
+  constructor(IERC20 _asset, string memory _name, string memory _symbol) BaseERC4626(_asset, _name, _symbol) {
     // solhint-disable-previous-line no-empty-blocks
   }
 
@@ -37,11 +33,7 @@ abstract contract SafeERC4626 is BaseERC4626 {
    * @param _receiver Account that receives the minted shares
    * @param _minShares Minimum amount of shares to receive
    */
-  function deposit(
-    uint256 _assets,
-    address _receiver,
-    uint256 _minShares
-  ) external virtual returns (uint256) {
+  function deposit(uint256 _assets, address _receiver, uint256 _minShares) external virtual returns (uint256) {
     uint256 shares = deposit(_assets, _receiver);
     if (shares < _minShares) revert CoveredVault__DepositSlippage();
     return shares;
@@ -53,11 +45,7 @@ abstract contract SafeERC4626 is BaseERC4626 {
    * @param _receiver Account that receives the minted shares
    * @param _maxAssets Maximum amount of assets to deposit
    */
-  function mint(
-    uint256 _shares,
-    address _receiver,
-    uint256 _maxAssets
-  ) external virtual returns (uint256) {
+  function mint(uint256 _shares, address _receiver, uint256 _maxAssets) external virtual returns (uint256) {
     uint256 assets = mint(_shares, _receiver);
     if (assets > _maxAssets) revert CoveredVault__MintSlippage();
     return assets;
