@@ -5,56 +5,70 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title CoverManager
- * @dev Contract allowed to interact with Nexus Mutual on behalf of allowed CoveredVaults
+ * @dev Interacts with Nexus Mutual on behalf of allowed accounts.
+ * A Nexus Mutual member MUST transfer the membership to this contract to be able to access the protocol.
  */
 contract CoverManager is Ownable {
-  address public coverContract;
-  address public yieldTokenIncidentContract;
-  mapping(address => bool) public isAllowed;
+  address public immutable cover;
+  address public immutable yieldTokenIncident;
+  mapping(address => bool) public allowList;
 
-  event Allowed(address indexed addressAllowed);
-  event Disallowed(address indexed addressDisallowed);
+  /* ========== Events ========== */
 
-  error AddressNotAllowed();
-  error AlreadyAllowed();
-  error AlreadyDisallowed();
+  event Allowed(address indexed account);
+  event Disallowed(address indexed account);
+
+
+  /* ========== Custom Errors ========== */
+
+  error CoverManager_NotAllowed();
+  error CoverManager_AlreadyAllowed();
+  error CoverManager_AlreadyDisallowed();
 
   modifier onlyAllowed() {
-    if (!isAllowed[msg.sender]) {
-      revert AddressNotAllowed();
+    if (!allowList[msg.sender]) {
+      revert CoverManager_NotAllowed();
     }
     _;
   }
 
+  /* ========== Constructor ========== */
+
   /**
    * @dev Initializes the main admin role
+   * @param _cover Address of the Cover contract
+   * @param _yieldTokenIncident Address of the YieldTokenIncident contract
    */
-  constructor(address _coverAddress, address _yieldTokenIncidentAddress) {
-    coverContract = _coverAddress;
-    yieldTokenIncidentContract = _yieldTokenIncidentAddress;
+  constructor(address _cover, address _yieldTokenIncident) {
+    cover = _cover;
+    yieldTokenIncident = _yieldTokenIncident;
+  }
+
+  /* ========== Admin methods ========== */
+
+  /**
+   * @dev Allows an account to call methods in this contract
+   * @param _account Address to allow calling methods
+   */
+  function addToAllowList(address _account) external onlyOwner {
+    if (allowList[_account]) {
+      revert CoverManager_AlreadyAllowed();
+    }
+
+    allowList[_account] = true;
+    emit Allowed(_account);
   }
 
   /**
-   * @dev Allow a CoveredVault to call methods in this contract
-   * @param _toAllow Address to allow calling methods
+   * @dev Remove permission of an account to call methods in this contract
+   * @param _account Address to reject calling methods
    */
-  function allowCaller(address _toAllow) external onlyOwner {
-    if (isAllowed[_toAllow]) {
-      revert AlreadyAllowed();
+  function removeFromAllowList(address _account) external onlyOwner {
+    if (!allowList[_account]) {
+      revert CoverManager_AlreadyDisallowed();
     }
-    isAllowed[_toAllow] = true;
-    emit Allowed(_toAllow);
-  }
 
-  /**
-   * @dev Remove permission of a CoveredVault to call methods in this contract
-   * @param _toDisallow Address to reject calling methods
-   */
-  function disallowCaller(address _toDisallow) external onlyOwner {
-    if (!isAllowed[_toDisallow]) {
-      revert AlreadyDisallowed();
-    }
-    isAllowed[_toDisallow] = false;
-    emit Disallowed(_toDisallow);
+    allowList[_account] = false;
+    emit Disallowed(_account);
   }
 }
