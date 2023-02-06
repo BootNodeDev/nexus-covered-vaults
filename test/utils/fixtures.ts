@@ -5,11 +5,12 @@ const vaultName = "USDC Covered Vault";
 const vaultSymbol = "cvUSDC";
 
 export async function deployUnderlyingVaultFixture() {
-  const ERC20Mock = await ethers.getContractFactory("ERC20Mock");
-  const ERC4626Mock = await ethers.getContractFactory("ERC4626Mock");
-
-  const underlyingAsset = await ERC20Mock.deploy("USDC", "USDC");
-  const underlyingVault = await ERC4626Mock.deploy(underlyingAsset.address, "USDC Invest Vault", "ivUSDC");
+  const underlyingAsset = await ethers.deployContract("ERC20Mock", ["USDC", "USDC"]);
+  const underlyingVault = await ethers.deployContract("ERC4626Mock", [
+    underlyingAsset.address,
+    "USDC Invest Vault",
+    "ivUSDC",
+  ]);
 
   return { underlyingVault, underlyingAsset };
 }
@@ -30,29 +31,24 @@ export async function deployVaultFixture() {
       return true;
     });
 
-  const CoveredVault = await ethers.getContractFactory("CoveredVault");
-  const vault = CoveredVault.attach(vaultAddress);
+  const vault = await ethers.getContractAt("CoveredVault", vaultAddress);
 
   return { vault, underlyingVault, underlyingAsset };
 }
 
 export async function deployVaultFactoryFixture() {
-  const CoveredVaultFactory = await ethers.getContractFactory("CoveredVaultFactory");
-  const vaultFactory = await CoveredVaultFactory.deploy();
+  const vaultFactory = await ethers.deployContract("CoveredVaultFactory");
 
   return { vaultFactory };
 }
 
 export async function deployCoverManager() {
-  const CoverManager = await ethers.getContractFactory("CoverManager");
-  const CoverMock = await ethers.getContractFactory("CoverMock");
-  const YieldTokenIncidentsMock = await ethers.getContractFactory("YieldTokenIncidentsMock");
-  const [, , , , kycUser] = await ethers.getSigners();
+  const [, , , , owner] = await ethers.getSigners();
 
-  const cover = await CoverMock.deploy();
-  const yieldTokenIncidents = await YieldTokenIncidentsMock.deploy();
+  const cover = await ethers.deployContract("CoverMock");
+  const yieldTokenIncidents = await ethers.deployContract("YieldTokenIncidentsMock");
 
-  const coverManager = await CoverManager.connect(kycUser).deploy(cover.address, yieldTokenIncidents.address);
+  const coverManager = await ethers.deployContract("CoverManager", [cover.address, yieldTokenIncidents.address], owner);
 
   return { coverManager, cover, yieldTokenIncidents };
 }
