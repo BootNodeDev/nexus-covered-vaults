@@ -127,10 +127,10 @@ describe("CoverManager", function () {
       const PREMIUM_DENOMINATOR = await cover.PREMIUM_DENOMINATOR();
       const premiumAmount = buyCoverParams.amount.mul(premium).div(PREMIUM_DENOMINATOR);
 
-      expect(balanceAfter).to.be.eq(balanceBefore.sub(buyCoverParams.amount).sub(premiumAmount));
+      expect(balanceAfter).to.be.eq(balanceBefore.sub(premiumAmount));
     });
 
-    it.only("Should return to sender amount not spent in asset", async () => {
+    it("Should return to sender amount not spent in asset", async () => {
       const { coverManager, cover, underlyingAsset } = await loadFixture(deployCoverManager);
       const [user1, , , , kycUser] = await ethers.getSigners();
 
@@ -153,7 +153,7 @@ describe("CoverManager", function () {
       const premiumAmount = buyCoverParams.amount.mul(premium).div(PREMIUM_DENOMINATOR);
 
       console.log(ethers.utils.formatEther(balanceBefore.sub(balanceAfter)));
-      expect(balanceAfter).to.be.eq(balanceBefore.sub(buyCoverParams.amount).sub(premiumAmount));
+      expect(balanceAfter).to.be.eq(balanceBefore.sub(premiumAmount));
     });
   });
 });

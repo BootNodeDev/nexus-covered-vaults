@@ -133,8 +133,8 @@ contract CoverManager is Ownable {
     initialBalance = isETH ? address(this).balance - msg.value : IERC20(asset).balanceOf(address(this));
 
     if (!isETH) {
-      IERC20(asset).transferFrom(msg.sender, address(this), params.amount + params.maxPremiumInAsset);
-      IERC20(asset).approve(coverContract, params.amount + params.maxPremiumInAsset); // TODO Control this
+      IERC20(asset).transferFrom(msg.sender, address(this), params.maxPremiumInAsset);
+      IERC20(asset).approve(coverContract, params.maxPremiumInAsset);
     }
 
     coverId = ICover(coverContract).buyCover{ value: msg.value }(params, coverChunkRequests);
