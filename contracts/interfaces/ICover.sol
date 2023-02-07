@@ -23,8 +23,8 @@ struct BuyCoverParams {
 }
 
 interface ICover {
-  function buyCover(BuyCoverParams calldata params, PoolAllocationRequest[] calldata coverChunkRequests)
-    external
-    payable
-    returns (uint256 coverId);
+  function buyCover(
+    BuyCoverParams calldata params,
+    PoolAllocationRequest[] calldata coverChunkRequests
+  ) external payable returns (uint256 coverId);
 }

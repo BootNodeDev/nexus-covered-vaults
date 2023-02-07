@@ -26,11 +26,10 @@ contract CoverMock {
     premium = _premium;
   }
 
-  function buyCover(BuyCoverParams calldata params, PoolAllocationRequest[] calldata coverChunkRequests)
-    external
-    payable
-    returns (uint256)
-  {
+  function buyCover(
+    BuyCoverParams calldata params,
+    PoolAllocationRequest[] calldata /* coverChunkRequests */
+  ) external payable returns (uint256) {
     uint256 amountToPay = ((params.amount * premium) / PREMIUM_DENOMINATOR);
     if (amountToPay > params.maxPremiumInAsset) {
       revert PremiumAmountHigherThanMaxPremium();

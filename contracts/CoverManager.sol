@@ -47,11 +47,7 @@ contract CoverManager is Ownable {
    * @param _cover Address of the Cover contract
    * @param _yieldTokenIncident Address of the YieldTokenIncident contract
    */
-  constructor(
-    address _cover,
-    address _yieldTokenIncident,
-    address _pool
-  ) {
+  constructor(address _cover, address _yieldTokenIncident, address _pool) {
     cover = _cover;
     yieldTokenIncident = _yieldTokenIncident;
     pool = _pool;
@@ -126,12 +122,10 @@ contract CoverManager is Ownable {
    * @param params parameters to call buyCover
    * @param coverChunkRequests Data for each poolId
    */
-  function buyCover(BuyCoverParams calldata params, PoolAllocationRequest[] calldata coverChunkRequests)
-    external
-    payable
-    onlyAllowed
-    returns (uint256 coverId)
-  {
+  function buyCover(
+    BuyCoverParams calldata params,
+    PoolAllocationRequest[] calldata coverChunkRequests
+  ) external payable onlyAllowed returns (uint256 coverId) {
     uint256 initialBalance;
     uint256 finalBalance;
 
@@ -171,5 +165,7 @@ contract CoverManager is Ownable {
     return coverId;
   }
 
-  receive() external payable {}
+  receive() external payable {
+    // solhint-disable-previous-line no-empty-blocks
+  }
 }
