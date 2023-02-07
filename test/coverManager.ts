@@ -29,8 +29,8 @@ describe("CoverManager", function () {
     it("Should correctly set params", async function () {
       const { cover, coverManager, yieldTokenIncidents } = await loadFixture(deployCoverManager);
 
-      expect(await coverManager.coverContract()).to.equal(cover.address);
-      expect(await coverManager.yieldTokenIncidentContract()).to.equal(yieldTokenIncidents.address);
+      expect(await coverManager.cover()).to.equal(cover.address);
+      expect(await coverManager.yieldTokenIncident()).to.equal(yieldTokenIncidents.address);
     });
   });
 
@@ -38,53 +38,53 @@ describe("CoverManager", function () {
     it("Should give owner rights to deployer", async function () {
       const { coverManager } = await loadFixture(deployCoverManager);
 
-      const [, , , , kycUser] = await ethers.getSigners();
+      const [, , , , owner] = await ethers.getSigners();
 
-      expect(await coverManager.owner()).to.equals(kycUser.address);
+      expect(await coverManager.owner()).to.equals(owner.address);
     });
 
-    it("Should revert if allowCaller is called by anybody but owner", async function () {
+    it("Should revert if addToAllowList is called by anybody but owner", async function () {
       const { coverManager } = await loadFixture(deployCoverManager);
-      const [user1, user2, , , kycUser] = await ethers.getSigners();
+      const [user1, user2, , , owner] = await ethers.getSigners();
 
-      await expect(coverManager.connect(user1).allowCaller(user2.address)).to.be.revertedWith(
+      await expect(coverManager.connect(user1).addToAllowList(user2.address)).to.be.revertedWith(
         "Ownable: caller is not the owner",
       );
 
-      await expect(coverManager.connect(kycUser).allowCaller(user2.address)).to.not.be.reverted;
+      await expect(coverManager.connect(owner).addToAllowList(user2.address)).to.not.be.reverted;
     });
 
-    it("Should revert if disallowCaller is called by anybody but owner", async function () {
+    it("Should revert if removeFromAllowList is called by anybody but owner", async function () {
       const { coverManager } = await loadFixture(deployCoverManager);
-      const [user1, user2, , , kycUser] = await ethers.getSigners();
+      const [user1, user2, , , owner] = await ethers.getSigners();
 
-      await expect(coverManager.connect(user1).disallowCaller(user2.address)).to.be.revertedWith(
+      await expect(coverManager.connect(user1).removeFromAllowList(user2.address)).to.be.revertedWith(
         "Ownable: caller is not the owner",
       );
 
-      await expect(coverManager.connect(kycUser).allowCaller(user2.address)).to.not.be.reverted;
+      await expect(coverManager.connect(owner).addToAllowList(user2.address)).to.not.be.reverted;
     });
   });
 
   describe("allowed callers", function () {
     it("Should revert if is already allowed", async function () {
       const { coverManager } = await loadFixture(deployCoverManager);
-      const [user1, , , , kycUser] = await ethers.getSigners();
+      const [user1, , , , owner] = await ethers.getSigners();
 
-      await coverManager.connect(kycUser).allowCaller(user1.address);
-      await expect(coverManager.connect(kycUser).allowCaller(user1.address)).to.be.revertedWithCustomError(
+      await coverManager.connect(owner).addToAllowList(user1.address);
+      await expect(coverManager.connect(owner).addToAllowList(user1.address)).to.be.revertedWithCustomError(
         coverManager,
-        "AlreadyAllowed",
+        "CoverManager_AlreadyAllowed",
       );
     });
 
     it("Should revert if is already disallowed", async function () {
       const { coverManager } = await loadFixture(deployCoverManager);
-      const [user1, , , , kycUser] = await ethers.getSigners();
+      const [user1, , , , owner] = await ethers.getSigners();
 
-      await expect(coverManager.connect(kycUser).disallowCaller(user1.address)).to.be.revertedWithCustomError(
+      await expect(coverManager.connect(owner).removeFromAllowList(user1.address)).to.be.revertedWithCustomError(
         coverManager,
-        "AlreadyDisallowed",
+        "CoverManager_AlreadyDisallowed",
       );
     });
   });
@@ -94,12 +94,12 @@ describe("CoverManager", function () {
       const { coverManager } = await loadFixture(deployCoverManager);
       const [user1, , , , kycUser] = await ethers.getSigners();
 
-      await coverManager.connect(kycUser).allowCaller(user1.address);
+      await coverManager.connect(kycUser).addToAllowList(user1.address);
       await expect(
         coverManager
           .connect(user1)
           .buyCover({ ...buyCoverParams, paymentAsset: 1 }, [poolAlloc], { value: buyCoverParams.amount }),
-      ).to.be.revertedWithCustomError(coverManager, "EthNotExpected");
+      ).to.be.revertedWithCustomError(coverManager, "CoverManager_EthNotExpected");
 
       await expect(
         coverManager
@@ -112,7 +112,7 @@ describe("CoverManager", function () {
       const { coverManager, cover } = await loadFixture(deployCoverManager);
       const [user1, , , , kycUser] = await ethers.getSigners();
 
-      await coverManager.connect(kycUser).allowCaller(user1.address);
+      await coverManager.connect(kycUser).addToAllowList(user1.address);
 
       const balanceBefore = await user1.getBalance();
 
@@ -134,7 +134,7 @@ describe("CoverManager", function () {
       const { coverManager, cover, underlyingAsset } = await loadFixture(deployCoverManager);
       const [user1, , , , kycUser] = await ethers.getSigners();
 
-      await coverManager.connect(kycUser).allowCaller(user1.address);
+      await coverManager.connect(kycUser).addToAllowList(user1.address);
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("10000"));
       await underlyingAsset.connect(user1).approve(coverManager.address, ethers.utils.parseEther("10000"));
 
