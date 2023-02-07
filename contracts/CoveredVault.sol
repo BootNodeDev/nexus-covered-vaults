@@ -85,11 +85,7 @@ contract CoveredVault is SafeERC4626, AccessManager {
   }
 
   /** @dev See {IERC4626-redeem}. */
-  function redeem(
-    uint256 _shares,
-    address _receiver,
-    address _owner
-  ) public override whenNotPaused returns (uint256) {
+  function redeem(uint256 _shares, address _receiver, address _owner) public override whenNotPaused returns (uint256) {
     return super.redeem(_shares, _receiver, _owner);
   }
 
