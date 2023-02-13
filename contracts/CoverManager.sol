@@ -14,6 +14,8 @@ import { IPool } from "./interfaces/IPool.sol";
  * A Nexus Mutual member MUST transfer the membership to this contract to be able to access the protocol.
  */
 contract CoverManager is Ownable {
+  using SafeERC20 for IERC20;
+
   address public immutable cover;
   address public immutable yieldTokenIncident;
   address public immutable pool;
@@ -81,46 +83,11 @@ contract CoverManager is Ownable {
     emit Disallowed(_account);
   }
 
-  // function buyCover(BuyCoverParams calldata params, PoolAllocationRequest[] calldata coverChunkRequests)
-  //   external
-  //   payable
-  //   onlyAllowed
-  //   returns (uint256 coverId)
-  // {
-  //   bool isETH = params.paymentAsset == 0;
-
-  //   if (isETH) {
-  //     uint256 initialBalance = address(this).balance - msg.value;
-
-  //     coverId = ICover(coverContract).buyCover{ value: msg.value }(params, coverChunkRequests);
-
-  //     uint256 finalBalance = address(this).balance;
-
-  //     // solhint-disable-next-line avoid-low-level-calls
-  //     (bool success, ) = address(msg.sender).call{ value: finalBalance - initialBalance }("");
-  //     if (!success) {
-  //       revert SendingEthFailed();
-  //     }
-  //   } else {
-  //     (address asset, ) = IPool(pool).coverAssets(params.paymentAsset);
-  //     uint256 initialBalance = IERC20(asset).balanceOf(address(this));
-
-  //     IERC20(asset).transferFrom(msg.sender, address(this), params.maxPremiumInAsset);
-
-  //     coverId = ICover(coverContract).buyCover{ value: msg.value }(params, coverChunkRequests);
-
-  //     uint256 finalBalance = IERC20(asset).balanceOf(address(this));
-
-  //     IERC20(asset).transferFrom(address(this), msg.sender, finalBalance - initialBalance);
-  //   }
-
-  //   return coverId;
-  // }
-
   /**
-   * @dev buyCover as CoverManager, member of Nexus
+   * @dev Allows to call Cover.buyCover() on Nexus Mutual
+   * Gets caller funds to pay for the premium and returns the remaining
    * @param params parameters to call buyCover
-   * @param coverChunkRequests Data for each poolId
+   * @param coverChunkRequests pool allocations for buyCover
    */
   function buyCover(
     BuyCoverParams calldata params,
@@ -165,6 +132,9 @@ contract CoverManager is Ownable {
     return coverId;
   }
 
+  /**
+   * @dev Used to receive buyCover remaining ETH and cover payments
+   */
   receive() external payable {
     // solhint-disable-previous-line no-empty-blocks
   }

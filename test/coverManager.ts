@@ -90,7 +90,7 @@ describe("CoverManager", function () {
   });
 
   describe("Buy Cover", function () {
-    it("Should revert if is called with and ERC20 and ETH", async () => {
+    it("Should revert if is called with an ERC20 and ETH", async () => {
       const { coverManager } = await loadFixture(deployCoverManager);
       const [user1, , , , kycUser] = await ethers.getSigners();
 
@@ -152,7 +152,6 @@ describe("CoverManager", function () {
       const PREMIUM_DENOMINATOR = await cover.PREMIUM_DENOMINATOR();
       const premiumAmount = buyCoverParams.amount.mul(premium).div(PREMIUM_DENOMINATOR);
 
-      console.log(ethers.utils.formatEther(balanceBefore.sub(balanceAfter)));
       expect(balanceAfter).to.be.eq(balanceBefore.sub(premiumAmount));
     });
   });
