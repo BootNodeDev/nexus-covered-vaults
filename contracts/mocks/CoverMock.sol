@@ -50,12 +50,7 @@ contract CoverMock {
         if (!success) revert CoverMock_EthSendFailed();
       }
     } else {
-      SafeERC20.safeTransferFrom(IERC20(asset), msg.sender, address(this), params.maxPremiumInAsset);
-
-      uint256 remaining = params.maxPremiumInAsset - amountToPay;
-      if (remaining > 0) {
-        SafeERC20.safeTransfer(IERC20(asset), msg.sender, remaining);
-      }
+      SafeERC20.safeTransferFrom(IERC20(asset), msg.sender, address(this), amountToPay);
     }
 
     return (params.coverId == 0) ? ++coverId : params.coverId;

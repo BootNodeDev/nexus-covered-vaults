@@ -94,28 +94,29 @@ contract CoverManager is Ownable {
     PoolAllocationRequest[] calldata coverChunkRequests
   ) external payable onlyAllowed returns (uint256 coverId) {
     uint256 initialBalance;
-    uint256 finalBalance;
+    address asset;
 
     bool isETH = params.paymentAsset == 0;
 
-    if (!isETH && msg.value != 0) {
-      revert CoverManager_EthNotExpected();
-    }
-
-    address asset = IPool(pool).getAsset(params.paymentAsset).assetAddress;
-
-    initialBalance = isETH ? address(this).balance - msg.value : IERC20(asset).balanceOf(address(this));
-
     if (!isETH) {
-      IERC20(asset).transferFrom(msg.sender, address(this), params.maxPremiumInAsset);
-      IERC20(asset).approve(cover, params.maxPremiumInAsset);
+      if (msg.value != 0) revert CoverManager_EthNotExpected();
+
+      asset = IPool(pool).getAsset(params.paymentAsset).assetAddress;
+
+      initialBalance = IERC20(asset).balanceOf(address(this));
+
+      IERC20(asset).safeTransferFrom(msg.sender, address(this), params.maxPremiumInAsset);
+      IERC20(asset).safeApprove(cover, params.maxPremiumInAsset);
+    } else {
+      initialBalance = address(this).balance - msg.value;
     }
 
     coverId = ICover(cover).buyCover{ value: msg.value }(params, coverChunkRequests);
 
-    finalBalance = isETH ? address(this).balance : IERC20(asset).balanceOf(address(this));
+    uint256 finalBalance = isETH ? address(this).balance : IERC20(asset).balanceOf(address(this));
 
     uint256 remaining = finalBalance - initialBalance;
+
     // ETH/Asset unspent is returned to buyer
     if (remaining > 0) {
       if (isETH) {
@@ -125,7 +126,9 @@ contract CoverManager is Ownable {
           revert CoverManager_SendingEthFailed();
         }
       } else {
-        SafeERC20.safeTransfer(IERC20(asset), msg.sender, remaining);
+        IERC20(asset).safeTransfer(msg.sender, remaining);
+        // reset allowance to 0 to comply with tokens that implement the anti frontrunning approval fix (ie. USDT)
+        IERC20(asset).safeApprove(cover, 0);
       }
     }
 
