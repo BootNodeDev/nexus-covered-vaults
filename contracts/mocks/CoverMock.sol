@@ -12,17 +12,17 @@ contract CoverMock {
   uint256 public premium = 100; // 1%
   uint256 public coverId = 1;
 
-  error MaxPremiumSetToHigh();
-  error PremiumAmountHigherThanMaxPremium();
-  error InsufficientETHForPremium();
-  error EthSendFailed();
+  error CoverMock_PremiumTooHigh();
+  error CoverMock_PremiumAmountHigherThanMaxPremium();
+  error CoverMock_InsufficientETHForPremium();
+  error CoverMock_EthSendFailed();
 
   constructor(address _pool) {
     pool = _pool;
   }
 
   function setPremium(uint256 _premium) public {
-    if (_premium > PREMIUM_DENOMINATOR) revert MaxPremiumSetToHigh();
+    if (_premium > PREMIUM_DENOMINATOR) revert CoverMock_PremiumTooHigh();
     premium = _premium;
   }
 
@@ -32,7 +32,7 @@ contract CoverMock {
   ) external payable returns (uint256) {
     uint256 amountToPay = ((params.amount * premium) / PREMIUM_DENOMINATOR);
     if (amountToPay > params.maxPremiumInAsset) {
-      revert PremiumAmountHigherThanMaxPremium();
+      revert CoverMock_PremiumAmountHigherThanMaxPremium();
     }
 
     address asset = IPool(pool).getAsset(params.paymentAsset).assetAddress;
@@ -41,13 +41,13 @@ contract CoverMock {
 
     if (isETH) {
       if (amountToPay > msg.value) {
-        revert InsufficientETHForPremium();
+        revert CoverMock_InsufficientETHForPremium();
       }
       uint256 remaining = msg.value - amountToPay;
       if (remaining > 0) {
         // solhint-disable-next-line avoid-low-level-calls
         (bool success, ) = address(msg.sender).call{ value: remaining }("");
-        if (!success) revert EthSendFailed();
+        if (!success) revert CoverMock_EthSendFailed();
       }
     } else {
       SafeERC20.safeTransferFrom(IERC20(asset), msg.sender, address(this), params.maxPremiumInAsset);
