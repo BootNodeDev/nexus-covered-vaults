@@ -2,7 +2,7 @@ import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { deployVaultFactoryFixture, deployUnderlyingVaultFixture } from "./utils/fixtures";
+import { deployVaultFactoryFixture, deployUnderlyingVaultFixture, deployCoverManager } from "./utils/fixtures";
 
 const vaultName = "USDC Covered Vault";
 const vaultSymbol = "cvUSDC";
@@ -12,7 +12,6 @@ describe("CoveredVaultFactory", function () {
     it("Should deploy a new vault", async function () {
       const { underlyingVault, underlyingAsset } = await loadFixture(deployUnderlyingVaultFixture);
       const { vaultFactory } = await loadFixture(deployVaultFactoryFixture);
-
       const [, , , admin] = await ethers.getSigners();
       let vaultAddress: string = "";
 
@@ -24,6 +23,8 @@ describe("CoveredVaultFactory", function () {
           vaultSymbol,
           admin.address,
           ethers.constants.MaxUint256,
+          1,
+          ethers.constants.AddressZero,
         ),
       )
         .to.emit(vaultFactory, "CoveredVaultCreated")
