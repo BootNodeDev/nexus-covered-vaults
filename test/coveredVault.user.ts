@@ -313,11 +313,17 @@ describe("CoveredVault", function () {
       await underlyingAsset.connect(user1).approve(vault.address, userAmount);
       await underlyingAsset.connect(user2).approve(vault.address, userAmount);
 
+      expect(await vault.idleAssets()).to.equal(0);
+
       const depositAssets = parseEther("1000");
       await vault.connect(user1)["deposit(uint256,address)"](depositAssets, user1.address);
 
+      expect(await vault.idleAssets()).to.equal(depositAssets);
+
       const initialShares = await vault.balanceOf(user2.address);
       await vault.connect(user2)["deposit(uint256,address)"](depositAssets, user2.address);
+
+      expect(await vault.idleAssets()).to.equal(depositAssets.mul(2));
 
       const firstDepositShares = await vault.balanceOf(user2.address);
 
@@ -326,12 +332,17 @@ describe("CoveredVault", function () {
 
       // Increase vault assets
       await vault.connect(admin).invest(depositAssets.mul(2));
+      expect(await vault.idleAssets()).to.equal(0);
+
       await increaseUVValue(underlyingVault, underlyingAsset, depositAssets);
       const uvShares = await underlyingVault.balanceOf(vault.address);
       await vault.connect(admin).uninvest(uvShares);
+      expect(await vault.idleAssets()).to.equal(depositAssets.mul(3));
 
       await vault.connect(user2)["deposit(uint256,address)"](depositAssets, user2.address);
       const secondDepositShares = await vault.balanceOf(user2.address);
+
+      expect(await vault.idleAssets()).to.equal(depositAssets.mul(4));
 
       // 1:2/3 rate
       expect(secondDepositShares).to.equal(firstDepositShares.add(depositAssets.mul(2).div(3)));
@@ -349,16 +360,24 @@ describe("CoveredVault", function () {
       await underlyingAsset.connect(user1).approve(vault.address, userAmount);
       await underlyingAsset.connect(user2).approve(vault.address, userAmount);
 
+      expect(await vault.idleAssets()).to.equal(0);
+
       const depositAssets = parseEther("1000");
-      await vault.connect(user1)["deposit(uint256,address)"](parseEther("1000"), user1.address);
+      await vault.connect(user1)["deposit(uint256,address)"](depositAssets, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(depositAssets);
 
       // Deposit assets into underlying vault to the vault account
       await vault.connect(admin).invest(depositAssets);
       await increaseUVValue(underlyingVault, underlyingAsset, depositAssets);
 
+      expect(await vault.idleAssets()).to.equal(0);
+
       const initialShares = await vault.balanceOf(user2.address);
 
       await vault.connect(user2)["deposit(uint256,address)"](depositAssets, user2.address);
+
+      expect(await vault.idleAssets()).to.equal(depositAssets);
 
       const firstDepositShares = await vault.balanceOf(user2.address);
 
@@ -402,29 +421,42 @@ describe("CoveredVault", function () {
       await underlyingAsset.connect(user1).approve(vault.address, userAmount);
       await underlyingAsset.connect(user2).approve(vault.address, userAmount);
 
+      expect(await vault.idleAssets()).to.equal(0);
+
       const mintShares = parseEther("1000");
-      await vault.connect(user1)["deposit(uint256,address)"](parseEther("1000"), user1.address);
+      const depositAssets = mintShares; // 1:1 rate
+      await vault.connect(user1)["mint(uint256,address)"](mintShares, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(depositAssets);
 
       const initialAssets = await underlyingAsset.balanceOf(user2.address);
 
       await vault.connect(user2)["mint(uint256,address)"](mintShares, user2.address);
 
+      expect(await vault.idleAssets()).to.equal(depositAssets.mul(2));
+
       const firstDepositAssets = await underlyingAsset.balanceOf(user2.address);
 
       // 1:1 rate
-      expect(firstDepositAssets).to.equal(initialAssets.sub(mintShares));
+      expect(firstDepositAssets).to.equal(initialAssets.sub(depositAssets));
 
       // Increase vault assets
-      await vault.connect(admin).invest(mintShares.mul(2));
-      await increaseUVValue(underlyingVault, underlyingAsset, mintShares);
+      await vault.connect(admin).invest(depositAssets.mul(2));
+      expect(await vault.idleAssets()).to.equal(0);
+
+      await increaseUVValue(underlyingVault, underlyingAsset, depositAssets);
       const uvShares = await underlyingVault.balanceOf(vault.address);
       await vault.connect(admin).uninvest(uvShares);
+      expect(await vault.idleAssets()).to.equal(depositAssets.mul(3));
 
+      const previewAssetAmount = await vault.previewMint(mintShares);
       await vault.connect(user2)["mint(uint256,address)"](mintShares, user2.address);
       const secondDepositAssets = await underlyingAsset.balanceOf(user2.address);
 
+      expect(await vault.idleAssets()).to.equal(depositAssets.mul(3).add(previewAssetAmount));
+
       // 1:3/2 rate
-      expect(secondDepositAssets).to.equal(firstDepositAssets.sub(mintShares.mul(3).div(2)));
+      expect(secondDepositAssets).to.equal(firstDepositAssets.sub(depositAssets.mul(3).div(2)));
     });
 
     it("Should account for assets in the underlying vault", async function () {
@@ -439,16 +471,26 @@ describe("CoveredVault", function () {
       await underlyingAsset.connect(user1).approve(vault.address, userAmount);
       await underlyingAsset.connect(user2).approve(vault.address, userAmount);
 
+      expect(await vault.idleAssets()).to.equal(0);
+
       const mintShares = parseEther("1000");
+      const depositAssets = mintShares; // 1:1 rate
       await vault.connect(user1)["deposit(uint256,address)"](mintShares, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(depositAssets);
 
       // Deposit assets into underlying vault to the vault account
       await vault.connect(admin).invest(mintShares);
+      expect(await vault.idleAssets()).to.equal(0);
+
       await increaseUVValue(underlyingVault, underlyingAsset, mintShares);
 
       const initialAssets = await underlyingAsset.balanceOf(user2.address);
 
       await vault.connect(user2)["mint(uint256,address)"](mintShares, user2.address);
+
+      // needed twice assets amount to mint the same shares
+      expect(await vault.idleAssets()).to.equal(depositAssets.mul(2));
 
       const firstDepositAssets = await underlyingAsset.balanceOf(user2.address);
 
@@ -460,21 +502,29 @@ describe("CoveredVault", function () {
       const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
       const [user1, , , admin] = await ethers.getSigners();
 
-      const depositAmount = parseEther("1000");
+      const mintShares = parseEther("1000");
+      const assetsAmount = mintShares; // 1:1
 
       // Set max assets limit
-      await vault.connect(admin).setMaxAssetsLimit(depositAmount.mul(2));
+      await vault.connect(admin).setMaxAssetsLimit(assetsAmount.mul(2));
 
       // Mint assets to user and deposit
       const mintAmount = parseEther("10000");
       await underlyingAsset.mint(user1.address, mintAmount);
       await underlyingAsset.connect(user1).approve(vault.address, mintAmount);
 
-      await vault.connect(user1)["mint(uint256,address)"](depositAmount, user1.address);
-      await vault.connect(user1)["mint(uint256,address)"](depositAmount, user1.address);
+      expect(await vault.idleAssets()).to.equal(0);
+
+      await vault.connect(user1)["mint(uint256,address)"](mintShares, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(assetsAmount);
+
+      await vault.connect(user1)["mint(uint256,address)"](mintShares, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(assetsAmount.mul(2));
 
       await expect(
-        vault.connect(user1)["mint(uint256,address)"](depositAmount, user1.address),
+        vault.connect(user1)["mint(uint256,address)"](mintShares, user1.address),
       ).to.be.revertedWithCustomError(vault, "BaseERC4626__MintMoreThanMax");
     });
   });
@@ -485,7 +535,12 @@ describe("CoveredVault", function () {
       const [user1] = await ethers.getSigners();
 
       const user1Balance = await vault.balanceOf(user1.address);
+      const initialUser1Assets = await vault.convertToAssets(user1Balance);
+
+      expect(await vault.idleAssets()).to.equal(initialUser1Assets);
       const redeemTx = await vault["redeem(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       await expect(redeemTx).to.changeTokenBalances(
         underlyingAsset,
@@ -499,12 +554,20 @@ describe("CoveredVault", function () {
       const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
       const [user1, , , admin] = await ethers.getSigners();
 
+      const user1Balance = await vault.balanceOf(user1.address);
+      const initialUser1Assets = await vault.convertToAssets(user1Balance);
+
+      expect(await vault.idleAssets()).to.equal(initialUser1Assets);
+
       // Invest all assets into underlying vault
       const totalAssets = await underlyingAsset.balanceOf(vault.address);
       await vault.connect(admin).invest(totalAssets);
 
-      const user1Balance = await vault.balanceOf(user1.address);
+      expect(await vault.idleAssets()).to.equal(0);
+
       const redeemTx = await vault["redeem(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       await expect(redeemTx).to.changeTokenBalances(
         underlyingAsset,
@@ -518,16 +581,24 @@ describe("CoveredVault", function () {
       const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
       const [user1, , , admin] = await ethers.getSigners();
 
+      const user1Balance = await vault.balanceOf(user1.address);
+      const initialUser1Assets = await vault.convertToAssets(user1Balance);
+
+      expect(await vault.idleAssets()).to.equal(initialUser1Assets);
+
       // Invest all assets into underlying vault
       const totalAssets = await underlyingAsset.balanceOf(vault.address);
       await vault.connect(admin).invest(totalAssets);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       // Generate yield
       const yieldAmount = parseEther("1");
       await underlyingAsset.mint(underlyingVault.address, yieldAmount);
 
-      const user1Balance = await vault.balanceOf(user1.address);
       const redeemTx = await vault["redeem(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       await expect(redeemTx).to.changeTokenBalances(
         underlyingAsset,
@@ -541,9 +612,16 @@ describe("CoveredVault", function () {
       const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
       const [user1, user2, , admin] = await ethers.getSigners();
 
+      const user1Balance = await vault.balanceOf(user1.address);
+      const initialUser1Assets = await vault.convertToAssets(user1Balance);
+
+      expect(await vault.idleAssets()).to.equal(initialUser1Assets);
+
       // Invest all assets into underlying vault
       const totalAssets = await underlyingAsset.balanceOf(vault.address);
       await vault.connect(admin).invest(totalAssets);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       // Generate yield
       const yieldAmount = parseEther("1");
@@ -552,10 +630,16 @@ describe("CoveredVault", function () {
       // User2 deposit after generated yield
       const user2Amount = parseEther("1000");
       await vault.connect(user2)["deposit(uint256,address)"](user2Amount, user2.address);
+
+      expect(await vault.idleAssets()).to.equal(user2Amount);
+
       await vault.connect(admin).invest(user2Amount);
 
-      const user1Balance = await vault.balanceOf(user1.address);
+      expect(await vault.idleAssets()).to.equal(0);
+
       const redeemTx = await vault["redeem(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       await expect(redeemTx).to.changeTokenBalances(
         underlyingAsset,
@@ -569,9 +653,16 @@ describe("CoveredVault", function () {
       const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
       const [user1, user2, , admin] = await ethers.getSigners();
 
+      const user1Balance = await vault.balanceOf(user1.address);
+      const initialUser1Assets = await vault.convertToAssets(user1Balance);
+
+      expect(await vault.idleAssets()).to.equal(initialUser1Assets);
+
       // Invest all assets into underlying vault
       const totalAssets = await underlyingAsset.balanceOf(vault.address);
       await vault.connect(admin).invest(totalAssets);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       // Generate yield
       const yieldAmount = parseEther("1");
@@ -581,8 +672,11 @@ describe("CoveredVault", function () {
       const user2Amount = parseEther("1000");
       await vault.connect(user2)["deposit(uint256,address)"](user2Amount, user2.address);
 
-      const user1Balance = await vault.balanceOf(user1.address);
+      expect(await vault.idleAssets()).to.equal(user2Amount);
+
       const redeemTx = await vault["redeem(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       await expect(redeemTx).to.changeTokenBalances(
         underlyingAsset,
@@ -596,9 +690,16 @@ describe("CoveredVault", function () {
       const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
       const [user1, user2, , admin] = await ethers.getSigners();
 
+      const user1Balance = await vault.balanceOf(user1.address);
+      const initialUser1Assets = await vault.convertToAssets(user1Balance);
+
+      expect(await vault.idleAssets()).to.equal(initialUser1Assets);
+
       // Invest all assets into underlying vault
       const totalAssets = await underlyingAsset.balanceOf(vault.address);
       await vault.connect(admin).invest(totalAssets);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       // Generate yield
       const yieldAmount = parseEther("1");
@@ -608,8 +709,11 @@ describe("CoveredVault", function () {
       const user2Amount = parseEther("500");
       await vault.connect(user2)["deposit(uint256,address)"](user2Amount, user2.address);
 
-      const user1Balance = await vault.balanceOf(user1.address);
+      expect(await vault.idleAssets()).to.equal(user2Amount);
+
       const redeemTx = await vault["redeem(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       await expect(redeemTx).to.changeTokenBalances(
         underlyingAsset,
@@ -627,7 +731,12 @@ describe("CoveredVault", function () {
 
       const user1Shares = await vault.balanceOf(user1.address);
       const user1Balance = await vault.convertToAssets(user1Shares);
+
+      expect(await vault.idleAssets()).to.equal(user1Balance);
+
       const withdrawTx = await vault["withdraw(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       await expect(withdrawTx).to.changeTokenBalances(
         underlyingAsset,
@@ -641,13 +750,20 @@ describe("CoveredVault", function () {
       const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
       const [user1, , , admin] = await ethers.getSigners();
 
+      const user1Shares = await vault.balanceOf(user1.address);
+      const user1Balance = await vault.convertToAssets(user1Shares);
+
+      expect(await vault.idleAssets()).to.equal(user1Balance);
+
       // Invest all assets into underlying vault
       const totalAssets = await underlyingAsset.balanceOf(vault.address);
       await vault.connect(admin).invest(totalAssets);
 
-      const user1Shares = await vault.balanceOf(user1.address);
-      const user1Balance = await vault.convertToAssets(user1Shares);
+      expect(await vault.idleAssets()).to.equal(0);
+
       const withdrawTx = await vault["withdraw(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       await expect(withdrawTx).to.changeTokenBalances(
         underlyingAsset,
@@ -661,17 +777,25 @@ describe("CoveredVault", function () {
       const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
       const [user1, , , admin] = await ethers.getSigners();
 
+      const user1Shares = await vault.balanceOf(user1.address);
+      const initialUser1Balance = await vault.convertToAssets(user1Shares);
+
+      expect(await vault.idleAssets()).to.equal(initialUser1Balance);
+
       // Invest all assets into underlying vault
       const totalAssets = await underlyingAsset.balanceOf(vault.address);
       await vault.connect(admin).invest(totalAssets);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       // Generate yield
       const yieldAmount = parseEther("1");
       await underlyingAsset.mint(underlyingVault.address, yieldAmount);
 
-      const user1Shares = await vault.balanceOf(user1.address);
       const user1Balance = await vault.convertToAssets(user1Shares);
       const withdrawTx = await vault["withdraw(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       await expect(withdrawTx).to.changeTokenBalances(
         underlyingAsset,
@@ -685,9 +809,16 @@ describe("CoveredVault", function () {
       const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
       const [user1, user2, , admin] = await ethers.getSigners();
 
+      const user1Shares = await vault.balanceOf(user1.address);
+      const initialUser1Balance = await vault.convertToAssets(user1Shares);
+
+      expect(await vault.idleAssets()).to.equal(initialUser1Balance);
+
       // Invest all assets into underlying vault
       const totalAssets = await underlyingAsset.balanceOf(vault.address);
       await vault.connect(admin).invest(totalAssets);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       // Generate yield
       const yieldAmount = parseEther("1");
@@ -696,11 +827,17 @@ describe("CoveredVault", function () {
       // User2 deposit after generated yield
       const user2Amount = parseEther("1000");
       await vault.connect(user2)["deposit(uint256,address)"](user2Amount, user2.address);
+
+      expect(await vault.idleAssets()).to.equal(user2Amount);
+
       await vault.connect(admin).invest(user2Amount);
 
-      const user1Shares = await vault.balanceOf(user1.address);
+      expect(await vault.idleAssets()).to.equal(0);
+
       const user1Balance = await vault.convertToAssets(user1Shares);
       const withdrawTx = await vault["withdraw(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       await expect(withdrawTx).to.changeTokenBalances(
         underlyingAsset,
@@ -714,9 +851,16 @@ describe("CoveredVault", function () {
       const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
       const [user1, user2, , admin] = await ethers.getSigners();
 
+      const user1Shares = await vault.balanceOf(user1.address);
+      const initialUser1Balance = await vault.convertToAssets(user1Shares);
+
+      expect(await vault.idleAssets()).to.equal(initialUser1Balance);
+
       // Invest all assets into underlying vault
       const totalAssets = await underlyingAsset.balanceOf(vault.address);
       await vault.connect(admin).invest(totalAssets);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       // Generate yield
       const yieldAmount = parseEther("1");
@@ -726,9 +870,12 @@ describe("CoveredVault", function () {
       const user2Amount = parseEther("1000");
       await vault.connect(user2)["deposit(uint256,address)"](user2Amount, user2.address);
 
-      const user1Shares = await vault.balanceOf(user1.address);
+      expect(await vault.idleAssets()).to.equal(user2Amount);
+
       const user1Balance = await vault.convertToAssets(user1Shares);
       const withdrawTx = await vault["withdraw(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       await expect(withdrawTx).to.changeTokenBalances(
         underlyingAsset,
@@ -742,9 +889,16 @@ describe("CoveredVault", function () {
       const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
       const [user1, user2, , admin] = await ethers.getSigners();
 
+      const user1Shares = await vault.balanceOf(user1.address);
+      const initialUser1Balance = await vault.convertToAssets(user1Shares);
+
+      expect(await vault.idleAssets()).to.equal(initialUser1Balance);
+
       // Invest all assets into underlying vault
       const totalAssets = await underlyingAsset.balanceOf(vault.address);
       await vault.connect(admin).invest(totalAssets);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       // Generate yield
       const yieldAmount = parseEther("1");
@@ -754,9 +908,12 @@ describe("CoveredVault", function () {
       const user2Amount = parseEther("500");
       await vault.connect(user2)["deposit(uint256,address)"](user2Amount, user2.address);
 
-      const user1Shares = await vault.balanceOf(user1.address);
+      expect(await vault.idleAssets()).to.equal(user2Amount);
+
       const user1Balance = await vault.convertToAssets(user1Shares);
       const withdrawTx = await vault["withdraw(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(0);
 
       await expect(withdrawTx).to.changeTokenBalances(
         underlyingAsset,
