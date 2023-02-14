@@ -85,30 +85,6 @@ abstract contract BaseERC4626 is ERC4626, ERC20Permit {
     (maxAvailableMint, ) = _maxMint(_receiver);
   }
 
-  /* ========== User methods ========== */
-
-  /** @dev See {IERC4626-deposit}. */
-  function deposit(uint256 _assets, address _receiver) public virtual override returns (uint256) {
-    (uint256 maxAvailableDeposit, uint256 vaultTotalAssets) = _maxDeposit(_receiver);
-    if (_assets > maxAvailableDeposit) revert BaseERC4626__DepositMoreThanMax();
-
-    uint256 shares = _convertToShares(_assets, Math.Rounding.Down, vaultTotalAssets);
-    _deposit(_msgSender(), _receiver, _assets, shares);
-
-    return shares;
-  }
-
-  /** @dev See {IERC4626-mint}. */
-  function mint(uint256 _shares, address _receiver) public virtual override returns (uint256) {
-    (uint256 maxAvailableMint, uint256 vaultTotalAssets) = _maxMint(_receiver);
-    if (_shares > maxAvailableMint) revert BaseERC4626__MintMoreThanMax();
-
-    uint256 assets = _convertToAssets(_shares, Math.Rounding.Up, vaultTotalAssets);
-    _deposit(_msgSender(), _receiver, assets, _shares);
-
-    return assets;
-  }
-
   /* ========== Internal methods ========== */
 
   /** @dev See {IERC4626-maxMint}. */
