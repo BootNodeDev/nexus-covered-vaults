@@ -1,17 +1,20 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import { ERC20Mock, ERC4626Mock } from "../../typechain-types";
+
+const { parseEther } = ethers.utils;
 
 const vaultName = "USDC Covered Vault";
 const vaultSymbol = "cvUSDC";
 
 export async function deployUnderlyingVaultFixture() {
-  const underlyingAsset = await ethers.deployContract("ERC20Mock", ["USDC", "USDC"]);
-  const underlyingVault = await ethers.deployContract("ERC4626Mock", [
+  const underlyingAsset = (await ethers.deployContract("ERC20Mock", ["USDC", "USDC"])) as ERC20Mock;
+  const underlyingVault = (await ethers.deployContract("ERC4626Mock", [
     underlyingAsset.address,
     "USDC Invest Vault",
     "ivUSDC",
-  ]);
+  ])) as ERC4626Mock;
 
   return { underlyingVault, underlyingAsset };
 }
@@ -67,12 +70,15 @@ export async function mintVaultSharesFixture() {
   const [user1, user2] = await ethers.getSigners();
 
   // Mint assets to users
-  await underlyingAsset.mint(user1.address, ethers.utils.parseEther("10000"));
-  await underlyingAsset.mint(user2.address, ethers.utils.parseEther("10000"));
-  await underlyingAsset.connect(user1).approve(vault.address, ethers.utils.parseEther("10000"));
-  await underlyingAsset.connect(user2).approve(vault.address, ethers.utils.parseEther("10000"));
+  const userAmount = parseEther("10000");
+  await underlyingAsset.mint(user1.address, userAmount);
+  await underlyingAsset.mint(user2.address, userAmount);
 
-  await vault.connect(user1)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), user1.address);
+  await underlyingAsset.connect(user1).approve(vault.address, userAmount);
+  await underlyingAsset.connect(user2).approve(vault.address, userAmount);
+
+  const depositAmount = parseEther("1000");
+  await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
 
   return { vault, underlyingVault, underlyingAsset };
 }
