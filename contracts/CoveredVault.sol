@@ -5,6 +5,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ERC4626 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { AccessManager } from "./vault/AccessManager.sol";
 import { SafeERC4626 } from "./vault/SafeERC4626.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -15,12 +16,16 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
  * purchasing coverage on Nexus Mutual.
  */
 contract CoveredVault is SafeERC4626, AccessManager {
-  /** @dev Data related to a deposit fee change */
+  using SafeERC20 for IERC20;
+
   struct ProposedDepositFee {
     uint256 deadline;
     uint256 newFee;
   }
 
+  /**
+   * @dev Role for botOperator
+   */
   /** @dev Role for botOperator */
   bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
 
@@ -30,13 +35,27 @@ contract CoveredVault is SafeERC4626, AccessManager {
   /** @dev fee denominator 100% with two decimals */
   uint256 public constant FEE_DENOMINATOR = 1e4;
 
+  /**
+   * @dev Address of the underlying vault
+   */
   IERC4626 public immutable underlyingVault;
 
-  /** @dev Maximum amount of assets that can be managed by the vault.
+  /**
+   * @dev Maximum amount of assets that can be managed by the vault.
    * Helps to protect the growth of the vault and make sure all deposited assets can be invested and insured.
    * Used to calculate the available amount for new deposits.
    */
   uint256 public maxAssetsLimit;
+
+  /**
+   * @dev Amount of assets in the vault that are not invested
+   */
+  uint256 public idleAssets;
+
+  /**
+   * @dev Amount of shares of the underlying vault that represents the invested assets
+   */
+  uint256 public underlyingVaultShares;
 
   /** @dev Percentage charged to users on deposit on 1e4 units.
    * Helps to avoid short term deposits.
@@ -110,9 +129,11 @@ contract CoveredVault is SafeERC4626, AccessManager {
     if (_assets > maxAvailableDeposit) revert BaseERC4626__DepositMoreThanMax();
 
     uint256 fee = _calculateFee(_assets);
+    uint256 vaultAssets = _assets - fee;
 
-    uint256 shares = _convertToShares(_assets - fee, Math.Rounding.Down, vaultTotalAssets);
+    uint256 shares = _convertToShares(vaultAssets, Math.Rounding.Down, vaultTotalAssets);
     _deposit(_msgSender(), _receiver, _assets, shares);
+    idleAssets += vaultAssets;
     _transferFees(fee);
 
     return shares;
@@ -124,11 +145,26 @@ contract CoveredVault is SafeERC4626, AccessManager {
     if (_shares > maxAvailableMint) revert BaseERC4626__MintMoreThanMax();
 
     uint256 assets = _convertToAssets(_calculateSharesAfterFee(_shares), Math.Rounding.Up, vaultTotalAssets);
-
     _deposit(_msgSender(), _receiver, assets, _shares);
-    _transferFees(_calculateFee(assets));
+    uint256 fee = _calculateFee(assets);
+    idleAssets += assets - fee;
+    _transferFees(fee);
 
     return assets;
+  }
+
+  /** @dev See {IERC4626-withdraw}. */
+  function withdraw(
+    uint256 _assets,
+    address _receiver,
+    address _owner
+  ) public override whenNotPaused returns (uint256) {
+    return super.withdraw(_assets, _receiver, _owner);
+  }
+
+  /** @dev See {IERC4626-redeem}. */
+  function redeem(uint256 _shares, address _receiver, address _owner) public override whenNotPaused returns (uint256) {
+    return super.redeem(_shares, _receiver, _owner);
   }
 
   /** @dev See {IERC4626-previewDeposit}. */
@@ -144,42 +180,6 @@ contract CoveredVault is SafeERC4626, AccessManager {
     return _convertToAssets(sharesAfterFee, Math.Rounding.Up, false);
   }
 
-  /** @dev Get depositFee % of _assets */
-  function _calculateFee(uint256 _assets) internal view returns (uint256) {
-    return (_assets * depositFee) / FEE_DENOMINATOR;
-  }
-
-  /** @dev Get shares amount taking into account fee% */
-  function _calculateSharesAfterFee(uint256 _shares) internal view returns (uint256) {
-    // shares = assets - assets*fee%
-    // shares = assets * (1-fee%)
-    // assets = shares / (1-fee%)
-    return (_shares * FEE_DENOMINATOR) / (FEE_DENOMINATOR - depositFee);
-  }
-
-  /** @dev Transfer underlyingAsset amount of _fee to operator */
-  function _transferFees(uint256 _fee) internal returns (bool) {
-    return IERC20(asset()).transfer(getRoleMember(DEFAULT_ADMIN_ROLE, 0), _fee);
-  }
-
-  /** @dev See {IERC4626-withdraw}. */
-  function withdraw(
-    uint256 _assets,
-    address _receiver,
-    address _owner
-  ) public override whenNotPaused returns (uint256) {
-    return super.withdraw(_assets, _receiver, _owner);
-  }
-
-  /** @dev See {IERC4626-redeem}. */
-  function redeem(
-    uint256 _shares,
-    address _receiver,
-    address _owner
-  ) public override whenNotPaused returns (uint256) {
-    return super.redeem(_shares, _receiver, _owner);
-  }
-
   /* ========== Admin methods ========== */
 
   /**
@@ -189,6 +189,8 @@ contract CoveredVault is SafeERC4626, AccessManager {
   function invest(uint256 _amount) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
     IERC20(asset()).approve(address(underlyingVault), _amount);
     uint256 shares = underlyingVault.deposit(_amount, address(this));
+    idleAssets -= _amount;
+    underlyingVaultShares += shares;
 
     emit Invested(_amount, shares, msg.sender);
   }
@@ -199,6 +201,8 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   function uninvest(uint256 _shares) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
     uint256 assets = underlyingVault.redeem(_shares, address(this), address(this));
+    idleAssets += assets;
+    underlyingVaultShares -= _shares;
 
     emit UnInvested(assets, _shares, msg.sender);
   }
@@ -254,13 +258,21 @@ contract CoveredVault is SafeERC4626, AccessManager {
 
     _burn(owner, shares);
 
-    uint256 uninvestedAssets = IERC20(asset()).balanceOf(address(this));
+    if (assets > idleAssets) {
+      uint256 amountToWithdraw;
 
-    if (assets > uninvestedAssets) {
-      underlyingVault.withdraw(assets - uninvestedAssets, address(this), address(this));
+      unchecked {
+        amountToWithdraw = assets - idleAssets;
+      }
+
+      uint256 sharesBurned = underlyingVault.withdraw(amountToWithdraw, address(this), address(this));
+      underlyingVaultShares -= sharesBurned;
+      idleAssets = 0;
+    } else {
+      idleAssets -= assets;
     }
 
-    SafeERC20.safeTransfer(IERC20(asset()), receiver, assets);
+    IERC20(asset()).safeTransfer(receiver, assets);
 
     emit Withdraw(caller, receiver, owner, assets, shares);
   }
@@ -277,10 +289,27 @@ contract CoveredVault is SafeERC4626, AccessManager {
 
   /** @dev See {IERC4626-totalAssets}. */
   function _totalAssets(bool preview) internal view override returns (uint256) {
-    uint256 underlyingShares = underlyingVault.balanceOf(address(this));
-    uint256 underlyingAssets = preview == true
-      ? underlyingVault.previewRedeem(underlyingShares)
-      : underlyingVault.convertToAssets(underlyingShares);
-    return underlyingAssets + ERC4626.totalAssets();
+    uint256 investedAssets = preview == true
+      ? underlyingVault.previewRedeem(underlyingVaultShares)
+      : underlyingVault.convertToAssets(underlyingVaultShares);
+    return investedAssets + idleAssets;
+  }
+
+  /** @dev Get depositFee % of _assets */
+  function _calculateFee(uint256 _assets) internal view returns (uint256) {
+    return (_assets * depositFee) / FEE_DENOMINATOR;
+  }
+
+  /** @dev Get shares amount taking into account fee% */
+  function _calculateSharesAfterFee(uint256 _shares) internal view returns (uint256) {
+    // shares = assets - assets*fee%
+    // shares = assets * (1-fee%)
+    // assets = shares / (1-fee%)
+    return (_shares * FEE_DENOMINATOR) / (FEE_DENOMINATOR - depositFee);
+  }
+
+  /** @dev Transfer underlyingAsset amount of _fee to operator */
+  function _transferFees(uint256 _fee) internal returns (bool) {
+    return IERC20(asset()).transfer(getRoleMember(DEFAULT_ADMIN_ROLE, 0), _fee);
   }
 }

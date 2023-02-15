@@ -1,15 +1,19 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+
+const { parseEther } = ethers.utils;
 
 const vaultName = "USDC Covered Vault";
 const vaultSymbol = "cvUSDC";
 
 export async function deployUnderlyingVaultFixture() {
-  const ERC20Mock = await ethers.getContractFactory("ERC20Mock");
-  const ERC4626Mock = await ethers.getContractFactory("ERC4626Mock");
-
-  const underlyingAsset = await ERC20Mock.deploy("USDC", "USDC");
-  const underlyingVault = await ERC4626Mock.deploy(underlyingAsset.address, "USDC Invest Vault", "ivUSDC");
+  const underlyingAsset = await ethers.deployContract("ERC20Mock", ["USDC", "USDC"]);
+  const underlyingVault = await ethers.deployContract("ERC4626Mock", [
+    underlyingAsset.address,
+    "USDC Invest Vault",
+    "ivUSDC",
+  ]);
 
   return { underlyingVault, underlyingAsset };
 }
@@ -40,17 +44,34 @@ async function deployVaultFixtureCreator(fee = 0) {
       return true;
     });
 
-  const CoveredVault = await ethers.getContractFactory("CoveredVault");
-  const vault = CoveredVault.attach(vaultAddress);
+  const vault = await ethers.getContractAt("CoveredVault", vaultAddress);
 
   return { vault, underlyingVault, underlyingAsset };
 }
 
 export async function deployVaultFactoryFixture() {
-  const CoveredVaultFactory = await ethers.getContractFactory("CoveredVaultFactory");
-  const vaultFactory = await CoveredVaultFactory.deploy();
+  const vaultFactory = await ethers.deployContract("CoveredVaultFactory");
 
   return { vaultFactory };
+}
+
+export async function deployCoverManager() {
+  const [, , , , owner] = await ethers.getSigners();
+
+  const yieldTokenIncidents = await ethers.deployContract("YieldTokenIncidentsMock");
+  const underlyingAsset = await ethers.deployContract("ERC20Mock", ["DAI", "DAI"]);
+  const pool = await ethers.deployContract("PoolMock", [underlyingAsset.address]);
+  const cover = await ethers.deployContract("CoverMock", [pool.address]);
+  const coverManager = await ethers.deployContract(
+    "CoverManager",
+    [cover.address, yieldTokenIncidents.address, pool.address],
+    owner,
+  );
+
+  await setBalance(coverManager.address, ethers.utils.parseEther("1000"));
+  await setBalance(cover.address, ethers.utils.parseEther("1000"));
+
+  return { coverManager, cover, yieldTokenIncidents, underlyingAsset };
 }
 
 export async function mintVaultSharesFixture() {
@@ -58,12 +79,15 @@ export async function mintVaultSharesFixture() {
   const [user1, user2] = await ethers.getSigners();
 
   // Mint assets to users
-  await underlyingAsset.mint(user1.address, ethers.utils.parseEther("10000"));
-  await underlyingAsset.mint(user2.address, ethers.utils.parseEther("10000"));
-  await underlyingAsset.connect(user1).approve(vault.address, ethers.utils.parseEther("10000"));
-  await underlyingAsset.connect(user2).approve(vault.address, ethers.utils.parseEther("10000"));
+  const userAmount = parseEther("10000");
+  await underlyingAsset.mint(user1.address, userAmount);
+  await underlyingAsset.mint(user2.address, userAmount);
 
-  await vault.connect(user1)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), user1.address);
+  await underlyingAsset.connect(user1).approve(vault.address, userAmount);
+  await underlyingAsset.connect(user2).approve(vault.address, userAmount);
+
+  const depositAmount = parseEther("1000");
+  await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
 
   return { vault, underlyingVault, underlyingAsset };
 }

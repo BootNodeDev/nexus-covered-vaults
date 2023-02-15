@@ -3,7 +3,9 @@ import { increase } from "@nomicfoundation/hardhat-network-helpers/dist/src/help
 import { expect } from "chai";
 import { BigNumber } from "ethers";
 import { ethers } from "hardhat";
-import { deployVaultFixture } from "./utils/fixtures";
+import { deployVaultFixture, mintVaultSharesFixture } from "./utils/fixtures";
+
+const { parseEther } = ethers.utils;
 
 const vaultName = "USDC Covered Vault";
 const vaultSymbol = "cvUSDC";
@@ -43,30 +45,27 @@ describe("CoveredVault", function () {
 
   describe("invest", function () {
     it("Should revert if not admin or bot", async function () {
-      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const { vault } = await loadFixture(mintVaultSharesFixture);
       const [user1, , , admin] = await ethers.getSigners();
 
-      const amount = ethers.utils.parseEther("1000");
-      // Mint assets to vault
-      await underlyingAsset.mint(vault.address, amount);
+      const botRole = await vault.BOT_ROLE();
+      const amount = parseEther("1000");
 
       await expect(vault.connect(user1).invest(amount.div(2))).to.be.revertedWith(
-        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${await vault.BOT_ROLE()}`,
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${botRole}`,
       );
 
-      await vault.connect(admin).grantRole(await vault.BOT_ROLE(), user1.address);
+      await vault.connect(admin).grantRole(botRole, user1.address);
 
       await vault.connect(user1).invest(amount.div(2));
       await vault.connect(admin).invest(amount.div(2));
     });
 
     it("Should revert if paused", async function () {
-      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const { vault } = await loadFixture(mintVaultSharesFixture);
       const [, , , admin] = await ethers.getSigners();
 
-      const amount = ethers.utils.parseEther("1000");
-      // Mint assets to vault
-      await underlyingAsset.mint(vault.address, amount);
+      const amount = parseEther("1000");
 
       await vault.connect(admin).pause();
 
@@ -74,42 +73,49 @@ describe("CoveredVault", function () {
     });
 
     it("Should allow to invest all idle assets into the underlying vault", async function () {
-      const { vault, underlyingAsset, underlyingVault } = await loadFixture(deployVaultFixture);
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
       const [, , , admin] = await ethers.getSigners();
 
-      const amount = ethers.utils.parseEther("1000");
-      // Mint assets to vault
-      await underlyingAsset.mint(vault.address, amount);
+      const amount = parseEther("1000");
+
+      const initialIdleAssets = await vault.idleAssets();
+      const initialUnderlyingVaultShares = await vault.underlyingVaultShares();
 
       await expect(vault.connect(admin).invest(amount)).to.changeTokenBalances(
         underlyingAsset,
         [vault.address, underlyingVault.address],
         [amount.mul(-1), amount],
       );
+
+      expect(await vault.idleAssets()).to.equal(initialIdleAssets.sub(amount));
+      expect(await vault.underlyingVaultShares()).to.equal(initialUnderlyingVaultShares.add(amount));
     });
 
     it("Should allow to invest some idle assets into the underlying vault", async function () {
-      const { vault, underlyingAsset, underlyingVault } = await loadFixture(deployVaultFixture);
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
       const [, , , admin] = await ethers.getSigners();
 
-      const amount = ethers.utils.parseEther("1000");
-      // Mint assets to vault
-      await underlyingAsset.mint(vault.address, amount);
+      const amount = parseEther("1000");
 
-      await expect(vault.connect(admin).invest(amount.div(2))).to.changeTokenBalances(
+      const initialIdleAssets = await vault.idleAssets();
+      const initialUnderlyingVaultShares = await vault.underlyingVaultShares();
+
+      const investAmount = amount.div(2);
+      await expect(vault.connect(admin).invest(investAmount)).to.changeTokenBalances(
         underlyingAsset,
         [vault.address, underlyingVault.address],
         [amount.div(2).mul(-1), amount.div(2)],
       );
+
+      expect(await vault.idleAssets()).to.equal(initialIdleAssets.sub(investAmount));
+      expect(await vault.underlyingVaultShares()).to.equal(initialUnderlyingVaultShares.add(investAmount));
     });
 
     it("Should revert if trying to invest more assets that the vault has", async function () {
-      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const { vault } = await loadFixture(mintVaultSharesFixture);
       const [, , , admin] = await ethers.getSigners();
 
-      const amount = ethers.utils.parseEther("1000");
-      // Mint assets to vault
-      await underlyingAsset.mint(vault.address, amount);
+      const amount = parseEther("1000");
 
       await expect(vault.connect(admin).invest(amount.mul(2))).to.be.revertedWith(
         "ERC20: transfer amount exceeds balance",
@@ -117,12 +123,10 @@ describe("CoveredVault", function () {
     });
 
     it("Should emit an event with amount, shares and caller", async function () {
-      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const { vault } = await loadFixture(mintVaultSharesFixture);
       const [, , , admin] = await ethers.getSigners();
 
-      const amount = ethers.utils.parseEther("1000");
-      // Mint assets to vault
-      await underlyingAsset.mint(vault.address, amount);
+      const amount = parseEther("1000");
 
       await expect(vault.connect(admin).invest(amount))
         .to.emit(vault, "Invested")
@@ -132,18 +136,18 @@ describe("CoveredVault", function () {
 
   describe("uninvest", function () {
     it("Should revert if not admin or bot", async function () {
-      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const { vault } = await loadFixture(mintVaultSharesFixture);
       const [user1, , , admin] = await ethers.getSigners();
 
-      const amount = ethers.utils.parseEther("1000");
-      // Mint assets to vault
-      await underlyingAsset.mint(vault.address, amount);
+      const botRole = await vault.BOT_ROLE();
+
+      const amount = parseEther("1000");
 
       await expect(vault.connect(user1).uninvest(amount.div(2))).to.be.revertedWith(
-        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${await vault.BOT_ROLE()}`,
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${botRole}`,
       );
 
-      await vault.connect(admin).grantRole(await vault.BOT_ROLE(), user1.address);
+      await vault.connect(admin).grantRole(botRole, user1.address);
 
       // Invest to be able to uninvest
       await vault.connect(admin).invest(amount);
@@ -153,10 +157,10 @@ describe("CoveredVault", function () {
     });
 
     it("Should revert if paused", async function () {
-      const { vault } = await loadFixture(deployVaultFixture);
+      const { vault } = await loadFixture(mintVaultSharesFixture);
       const [, , , admin] = await ethers.getSigners();
 
-      const amount = ethers.utils.parseEther("1000");
+      const amount = parseEther("1000");
 
       await vault.connect(admin).pause();
 
@@ -164,30 +168,35 @@ describe("CoveredVault", function () {
     });
 
     it("Should allow to uninvest all active assets out of the underlying vault", async function () {
-      const { vault, underlyingAsset, underlyingVault } = await loadFixture(deployVaultFixture);
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
       const [, , , admin] = await ethers.getSigners();
 
-      const amount = ethers.utils.parseEther("1000");
-      // Mint assets to vault
-      await underlyingAsset.mint(vault.address, amount);
+      const amount = parseEther("1000");
       await vault.connect(admin).invest(amount);
+
+      const initialIdleAssets = await vault.idleAssets();
+      const initialUnderlyingVaultShares = await vault.underlyingVaultShares();
 
       await expect(vault.connect(admin).uninvest(amount)).to.changeTokenBalances(
         underlyingAsset,
         [vault.address, underlyingVault.address],
         [amount, amount.mul(-1)],
       );
+
+      expect(await vault.idleAssets()).to.equal(initialIdleAssets.add(amount));
+      expect(await vault.underlyingVaultShares()).to.equal(initialUnderlyingVaultShares.sub(amount));
     });
 
     it("Should allow to uninvest active assets with returns out of the underlying vault", async function () {
-      const { vault, underlyingAsset, underlyingVault } = await loadFixture(deployVaultFixture);
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
       const [, , , admin] = await ethers.getSigners();
 
-      const amount = ethers.utils.parseEther("1000");
-      // Mint assets to vault
-      await underlyingAsset.mint(vault.address, amount);
+      const amount = parseEther("1000");
 
       await vault.connect(admin).invest(amount);
+
+      const initialIdleAssets = await vault.idleAssets();
+      const initialUnderlyingVaultShares = await vault.underlyingVaultShares();
 
       // 100% yield
       await underlyingAsset.mint(underlyingVault.address, amount);
@@ -197,16 +206,17 @@ describe("CoveredVault", function () {
         [vault.address, underlyingVault.address],
         [amount.mul(2), amount.mul(-2)],
       );
+
+      expect(await vault.idleAssets()).to.equal(initialIdleAssets.add(amount.mul(2)));
+      expect(await vault.underlyingVaultShares()).to.equal(initialUnderlyingVaultShares.sub(amount));
     });
 
     it("Should emit an event with amount, shares and caller", async function () {
-      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const { vault } = await loadFixture(mintVaultSharesFixture);
       const [, , , admin] = await ethers.getSigners();
 
-      const amount = ethers.utils.parseEther("1000");
+      const amount = parseEther("1000");
 
-      // Mint assets to vault and invest them
-      await underlyingAsset.mint(vault.address, amount);
       await vault.connect(admin).invest(amount);
 
       await expect(vault.connect(admin).uninvest(amount))
@@ -217,7 +227,7 @@ describe("CoveredVault", function () {
 
   describe("Pausable", function () {
     it("Should be able to pause only by admin", async function () {
-      const { vault } = await loadFixture(deployVaultFixture);
+      const { vault } = await loadFixture(mintVaultSharesFixture);
 
       const [botUser, anyUser, , admin] = await ethers.getSigners();
       await vault.connect(admin).grantRole(vault.BOT_ROLE(), botUser.address);
@@ -229,7 +239,7 @@ describe("CoveredVault", function () {
     });
 
     it("Should be able to unpause when paused only by admin", async function () {
-      const { vault } = await loadFixture(deployVaultFixture);
+      const { vault } = await loadFixture(mintVaultSharesFixture);
 
       const [botUser, anyUser, , admin] = await ethers.getSigners();
       await vault.connect(admin).grantRole(vault.BOT_ROLE(), botUser.address);
@@ -241,149 +251,119 @@ describe("CoveredVault", function () {
       expect(await vault.connect(admin).paused()).to.equal(false);
     });
 
-    it("Should revert calls to redeem/withdraw/deposit/mint when paused", async function () {
-      const amount = "100000";
+    it("Should revert calls to deposit when paused", async function () {
       const pausedError = "Pausable: paused";
+      const amount = parseEther("1000");
 
-      const { vault, underlyingAsset, underlyingVault } = await loadFixture(deployVaultFixture);
+      const { vault } = await loadFixture(mintVaultSharesFixture);
 
       const [anyUser, , , admin] = await ethers.getSigners();
 
       await vault.connect(admin).pause();
 
-      // Mint assets
-      await underlyingAsset.mint(anyUser.address, ethers.utils.parseEther(amount));
-      await underlyingAsset.mint(admin.address, ethers.utils.parseEther(amount));
-
-      // Approve for both vaults
-      await underlyingAsset.connect(anyUser).approve(vault.address, ethers.utils.parseEther(amount));
-      await underlyingAsset.connect(admin).approve(vault.address, ethers.utils.parseEther(amount));
-
-      await underlyingAsset.connect(anyUser).approve(underlyingVault.address, ethers.utils.parseEther(amount));
-      await underlyingAsset.connect(admin).approve(underlyingVault.address, ethers.utils.parseEther(amount));
-
-      // check underlying vault deposit fails with admin-nonAdmin when paused
-      await expect(
-        vault.connect(anyUser)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), anyUser.address),
-      ).to.be.revertedWith(pausedError);
-      await expect(
-        vault.connect(admin)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), anyUser.address),
-      ).to.be.revertedWith(pausedError);
+      // check vault deposit fails with admin-nonAdmin when paused
+      await expect(vault.connect(anyUser)["deposit(uint256,address)"](amount, anyUser.address)).to.be.revertedWith(
+        pausedError,
+      );
+      await expect(vault.connect(admin)["deposit(uint256,address)"](amount, anyUser.address)).to.be.revertedWith(
+        pausedError,
+      );
 
       // check vault deposit fails with admin-nonAdmin when paused
       await expect(
-        vault
-          .connect(anyUser)
-          ["deposit(uint256,address,uint256)"](
-            ethers.utils.parseEther("1000"),
-            anyUser.address,
-            ethers.utils.parseEther("10"),
-          ),
+        vault.connect(anyUser)["deposit(uint256,address,uint256)"](amount, anyUser.address, amount),
       ).to.be.revertedWith(pausedError);
       await expect(
-        vault
-          .connect(admin)
-          ["deposit(uint256,address,uint256)"](
-            ethers.utils.parseEther("1000"),
-            anyUser.address,
-            ethers.utils.parseEther("10"),
-          ),
+        vault.connect(admin)["deposit(uint256,address,uint256)"](amount, anyUser.address, amount),
       ).to.be.revertedWith(pausedError);
+    });
+
+    it("Should revert calls to mint when paused", async function () {
+      const pausedError = "Pausable: paused";
+      const amount = parseEther("1000");
+
+      const { vault } = await loadFixture(mintVaultSharesFixture);
+
+      const [anyUser, , , admin] = await ethers.getSigners();
+
+      await vault.connect(admin).pause();
 
       // check underlying vault mint fails with admin-nonAdmin when paused
-      await expect(
-        vault.connect(anyUser)["mint(uint256,address)"](ethers.utils.parseEther("1000"), anyUser.address),
-      ).to.be.revertedWith(pausedError);
-      await expect(
-        vault.connect(admin)["mint(uint256,address)"](ethers.utils.parseEther("1000"), anyUser.address),
-      ).to.be.revertedWith(pausedError);
+      await expect(vault.connect(anyUser)["mint(uint256,address)"](amount, anyUser.address)).to.be.revertedWith(
+        pausedError,
+      );
+      await expect(vault.connect(admin)["mint(uint256,address)"](amount, anyUser.address)).to.be.revertedWith(
+        pausedError,
+      );
 
       // check vault mint fails with admin-nonAdmin when paused
       await expect(
-        vault
-          .connect(anyUser)
-          ["mint(uint256,address,uint256)"](
-            ethers.utils.parseEther("1000"),
-            anyUser.address,
-            ethers.utils.parseEther("10"),
-          ),
+        vault.connect(anyUser)["mint(uint256,address,uint256)"](amount, anyUser.address, amount),
       ).to.be.revertedWith(pausedError);
       await expect(
-        vault
-          .connect(admin)
-          ["mint(uint256,address,uint256)"](
-            ethers.utils.parseEther("1000"),
-            anyUser.address,
-            ethers.utils.parseEther("10"),
-          ),
+        vault.connect(admin)["mint(uint256,address,uint256)"](amount, anyUser.address, amount),
       ).to.be.revertedWith(pausedError);
+    });
 
-      // check underlying vault redeem fails with admin-nonAdmin when paused
-      await expect(
-        vault
-          .connect(anyUser)
-          ["redeem(uint256,address,address)"](ethers.utils.parseEther("1000"), anyUser.address, anyUser.address),
-      ).to.be.revertedWith(pausedError);
-      await expect(
-        vault
-          .connect(admin)
-          ["redeem(uint256,address,address)"](ethers.utils.parseEther("1000"), anyUser.address, anyUser.address),
-      ).to.be.revertedWith(pausedError);
+    it("Should revert calls to withdraw when paused", async function () {
+      const pausedError = "Pausable: paused";
+      const amount = parseEther("1000");
 
-      // check vault redeem fails with admin-nonAdmin when paused
-      await expect(
-        vault
-          .connect(anyUser)
-          ["redeem(uint256,address,address,uint256)"](
-            ethers.utils.parseEther("1000"),
-            anyUser.address,
-            anyUser.address,
-            ethers.utils.parseEther("10"),
-          ),
-      ).to.be.revertedWith(pausedError);
-      await expect(
-        vault
-          .connect(admin)
-          ["redeem(uint256,address,address,uint256)"](
-            ethers.utils.parseEther("1000"),
-            anyUser.address,
-            anyUser.address,
-            ethers.utils.parseEther("10"),
-          ),
-      ).to.be.revertedWith(pausedError);
+      const { vault } = await loadFixture(mintVaultSharesFixture);
+
+      const [anyUser, , , admin] = await ethers.getSigners();
+
+      await vault.connect(admin).pause();
 
       // check underlying vault withdraw fails with admin-nonAdmin when paused
       await expect(
-        vault
-          .connect(anyUser)
-          ["withdraw(uint256,address,address)"](ethers.utils.parseEther("1000"), anyUser.address, anyUser.address),
+        vault.connect(anyUser)["withdraw(uint256,address,address)"](amount, anyUser.address, anyUser.address),
       ).to.be.revertedWith(pausedError);
       await expect(
-        vault
-          .connect(admin)
-          ["withdraw(uint256,address,address)"](ethers.utils.parseEther("1000"), anyUser.address, anyUser.address),
+        vault.connect(admin)["withdraw(uint256,address,address)"](amount, anyUser.address, anyUser.address),
       ).to.be.revertedWith(pausedError);
 
       // check vault withdraw fails with admin-nonAdmin when paused
       await expect(
         vault
           .connect(anyUser)
-          ["withdraw(uint256,address,address,uint256)"](
-            ethers.utils.parseEther("1000"),
-            anyUser.address,
-            anyUser.address,
-            ethers.utils.parseEther("10"),
-          ),
+          ["withdraw(uint256,address,address,uint256)"](amount, anyUser.address, anyUser.address, amount),
       ).to.be.revertedWith(pausedError);
       await expect(
         vault
           .connect(admin)
-          ["withdraw(uint256,address,address,uint256)"](
-            ethers.utils.parseEther("1000"),
-            anyUser.address,
-            anyUser.address,
-            ethers.utils.parseEther("10"),
-          ),
+          ["withdraw(uint256,address,address,uint256)"](amount, anyUser.address, anyUser.address, amount),
+      ).to.be.revertedWith(pausedError);
+    });
+
+    it("Should revert calls to redeem when paused", async function () {
+      const pausedError = "Pausable: paused";
+      const amount = parseEther("1000");
+
+      const { vault } = await loadFixture(mintVaultSharesFixture);
+
+      const [anyUser, , , admin] = await ethers.getSigners();
+
+      await vault.connect(admin).pause();
+
+      // check underlying vault redeem fails with admin-nonAdmin when paused
+      await expect(
+        vault.connect(anyUser)["redeem(uint256,address,address)"](amount, anyUser.address, anyUser.address),
+      ).to.be.revertedWith(pausedError);
+      await expect(
+        vault.connect(admin)["redeem(uint256,address,address)"](amount, anyUser.address, anyUser.address),
+      ).to.be.revertedWith(pausedError);
+
+      // check vault redeem fails with admin-nonAdmin when paused
+      await expect(
+        vault
+          .connect(anyUser)
+          ["redeem(uint256,address,address,uint256)"](amount, anyUser.address, anyUser.address, amount),
+      ).to.be.revertedWith(pausedError);
+      await expect(
+        vault
+          .connect(admin)
+          ["redeem(uint256,address,address,uint256)"](amount, anyUser.address, anyUser.address, amount),
       ).to.be.revertedWith(pausedError);
     });
   });
