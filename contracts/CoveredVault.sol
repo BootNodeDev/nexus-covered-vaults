@@ -128,12 +128,12 @@ contract CoveredVault is SafeERC4626, AccessManager {
     (uint256 maxAvailableDeposit, uint256 vaultTotalAssets) = _maxDeposit(_receiver);
     if (_assets > maxAvailableDeposit) revert BaseERC4626__DepositMoreThanMax();
 
-    uint256 fee = _calculateFee(_assets);
-    uint256 vaultAssets = _assets - fee;
+    uint256 fee = _calculateFee(_assets, depositFee);
+    uint256 newVaultAssets = _assets - fee;
 
-    uint256 shares = _convertToShares(vaultAssets, Math.Rounding.Down, vaultTotalAssets);
+    uint256 shares = _convertToShares(newVaultAssets, Math.Rounding.Down, vaultTotalAssets);
     _deposit(_msgSender(), _receiver, _assets, shares);
-    idleAssets += vaultAssets;
+    idleAssets += newVaultAssets;
     _transferFees(fee);
 
     return shares;
@@ -144,13 +144,18 @@ contract CoveredVault is SafeERC4626, AccessManager {
     (uint256 maxAvailableMint, uint256 vaultTotalAssets) = _maxMint(_receiver);
     if (_shares > maxAvailableMint) revert BaseERC4626__MintMoreThanMax();
 
-    uint256 assets = _convertToAssets(_calculateSharesAfterFee(_shares), Math.Rounding.Up, vaultTotalAssets);
-    _deposit(_msgSender(), _receiver, assets, _shares);
-    uint256 fee = _calculateFee(assets);
-    idleAssets += assets - fee;
+    // Calculate the amount of assets that will be accounted for the vault for the shares
+    uint256 newVaultAssets = _convertToAssets(_shares, Math.Rounding.Up, vaultTotalAssets);
+    // Calculates the amount of assets the user needs to transfer for the required shares and the fees
+    uint256 totalAssets = _calculateAmountIncludingFee(newVaultAssets, depositFee);
+
+    _deposit(_msgSender(), _receiver, totalAssets, _shares);
+    uint256 fee = totalAssets - newVaultAssets;
+
+    idleAssets += newVaultAssets;
     _transferFees(fee);
 
-    return assets;
+    return newVaultAssets;
   }
 
   /** @dev See {IERC4626-withdraw}. */
@@ -169,15 +174,15 @@ contract CoveredVault is SafeERC4626, AccessManager {
 
   /** @dev See {IERC4626-previewDeposit}. */
   function previewDeposit(uint256 assets) public view override returns (uint256) {
-    uint256 fee = _calculateFee(assets);
+    uint256 fee = _calculateFee(assets, depositFee);
     return _convertToShares(assets - fee, Math.Rounding.Down, false);
   }
 
   /** @dev See {IERC4626-previewMint}. */
   function previewMint(uint256 shares) public view override returns (uint256) {
-    uint256 sharesAfterFee = _calculateSharesAfterFee(shares);
+    uint256 sharesIncludingFee = _calculateAmountIncludingFee(shares, depositFee);
 
-    return _convertToAssets(sharesAfterFee, Math.Rounding.Up, false);
+    return _convertToAssets(sharesIncludingFee, Math.Rounding.Up, false);
   }
 
   /* ========== Admin methods ========== */
@@ -295,17 +300,33 @@ contract CoveredVault is SafeERC4626, AccessManager {
     return investedAssets + idleAssets;
   }
 
-  /** @dev Get depositFee % of _assets */
-  function _calculateFee(uint256 _assets) internal view returns (uint256) {
-    return (_assets * depositFee) / FEE_DENOMINATOR;
+  /**
+   * @dev Calculates the fee to be subtracted from an amount
+   * feeAmount = _amount * FeeN / FeeD
+   * @param _amount total amount
+   * @param _fee fee numerator to be applied
+   * @return the quantity of _amount to be considered as a fee
+   */
+  function _calculateFee(uint256 _amount, uint256 _fee) internal pure returns (uint256) {
+    return (_amount * _fee) / FEE_DENOMINATOR;
   }
 
-  /** @dev Get shares amount taking into account fee% */
-  function _calculateSharesAfterFee(uint256 _shares) internal view returns (uint256) {
-    // shares = assets - assets*fee%
-    // shares = assets * (1-fee%)
-    // assets = shares / (1-fee%)
-    return (_shares * FEE_DENOMINATOR) / (FEE_DENOMINATOR - depositFee);
+  /**
+   * @dev Calculates the total amount from an amount that already got fees subtracted
+   * totalAmount = _amount + feeAmount
+   * totalAmount = _amount + totalAmount * FeeN/ FeeD
+   * totalAmount - totalAmount * FeeN/ FeeD = _amount
+   * totalAmount * (1 - FeeN/ FeeD) = _amount
+   * totalAmount = _amount / (1 - FeeN/ FeeD)
+   * totalAmount = (_amount / (1 - FeeN/ FeeD)) * (FeeD / FeeD)
+   * totalAmount = _amount * FeeD / (FeeD * (1 - FeeN/ FeeD))
+   * totalAmount = _amount * FeeD / (FeeD - FeeN)
+   * @param _amount amount
+   * @param _fee fee numerator to be applied
+   * @return the amount from which after subtracting the fee would result in _amount
+   */
+  function _calculateAmountIncludingFee(uint256 _amount, uint256 _fee) internal pure returns (uint256) {
+    return (_amount * FEE_DENOMINATOR) / (FEE_DENOMINATOR - _fee);
   }
 
   /** @dev Transfer underlyingAsset amount of _fee to operator */
