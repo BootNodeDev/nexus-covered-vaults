@@ -2,7 +2,7 @@ import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { deployVaultFactoryFixture, deployUnderlyingVaultFixture, deployCoverManager } from "./utils/fixtures";
+import { deployVaultFactoryFixture, deployUnderlyingVaultFixture } from "./utils/fixtures";
 
 const vaultName = "USDC Covered Vault";
 const vaultSymbol = "cvUSDC";

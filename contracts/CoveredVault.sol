@@ -7,6 +7,7 @@ import { BuyCoverParams, PoolAllocationRequest } from "./interfaces/ICover.sol";
 import { ICoverManager } from "./interfaces/ICoverManager.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ERC4626 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { AccessManager } from "./vault/AccessManager.sol";
 import { SafeERC4626 } from "./vault/SafeERC4626.sol";
 
@@ -16,21 +17,39 @@ import { SafeERC4626 } from "./vault/SafeERC4626.sol";
  * purchasing coverage on Nexus Mutual.
  */
 contract CoveredVault is SafeERC4626, AccessManager {
-  /** @dev Role for botOperator */
+  using SafeERC20 for IERC20;
+
+  /**
+   * @dev Role for botOperator
+   */
   bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
 
   /** @dev CoverId assigned on buyCover */
   uint256 public coverId;
 
+  /**
+   * @dev Address of the underlying vault
+   */
   IERC4626 public immutable underlyingVault;
   uint24 public immutable productId;
   ICoverManager public immutable coverManager;
 
-  /** @dev Maximum amount of assets that can be managed by the vault.
+  /**
+   * @dev Maximum amount of assets that can be managed by the vault.
    * Helps to protect the growth of the vault and make sure all deposited assets can be invested and insured.
    * Used to calculate the available amount for new deposits.
    */
   uint256 public maxAssetsLimit;
+
+  /**
+   * @dev Amount of assets in the vault that are not invested
+   */
+  uint256 public idleAssets;
+
+  /**
+   * @dev Amount of shares of the underlying vault that represents the invested assets
+   */
+  uint256 public underlyingVaultShares;
 
   /* ========== Events ========== */
 
@@ -79,12 +98,26 @@ contract CoveredVault is SafeERC4626, AccessManager {
 
   /** @dev See {IERC4626-deposit}. */
   function deposit(uint256 _assets, address _receiver) public override whenNotPaused returns (uint256) {
-    return super.deposit(_assets, _receiver);
+    (uint256 maxAvailableDeposit, uint256 vaultTotalAssets) = _maxDeposit(_receiver);
+    if (_assets > maxAvailableDeposit) revert BaseERC4626__DepositMoreThanMax();
+
+    uint256 shares = _convertToShares(_assets, Math.Rounding.Down, vaultTotalAssets);
+    _deposit(_msgSender(), _receiver, _assets, shares);
+    idleAssets += _assets;
+
+    return shares;
   }
 
   /** @dev See {IERC4626-mint}. */
   function mint(uint256 _shares, address _receiver) public override whenNotPaused returns (uint256) {
-    return super.mint(_shares, _receiver);
+    (uint256 maxAvailableMint, uint256 vaultTotalAssets) = _maxMint(_receiver);
+    if (_shares > maxAvailableMint) revert BaseERC4626__MintMoreThanMax();
+
+    uint256 assets = _convertToAssets(_shares, Math.Rounding.Up, vaultTotalAssets);
+    _deposit(_msgSender(), _receiver, assets, _shares);
+    idleAssets += assets;
+
+    return assets;
   }
 
   /** @dev See {IERC4626-withdraw}. */
@@ -124,6 +157,8 @@ contract CoveredVault is SafeERC4626, AccessManager {
   function invest(uint256 _amount) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
     IERC20(asset()).approve(address(underlyingVault), _amount);
     uint256 shares = underlyingVault.deposit(_amount, address(this));
+    idleAssets -= _amount;
+    underlyingVaultShares += shares;
 
     emit Invested(_amount, shares, msg.sender);
   }
@@ -134,6 +169,8 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   function uninvest(uint256 _shares) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
     uint256 assets = underlyingVault.redeem(_shares, address(this), address(this));
+    idleAssets += assets;
+    underlyingVaultShares -= _shares;
 
     emit UnInvested(assets, _shares, msg.sender);
   }
@@ -167,13 +204,21 @@ contract CoveredVault is SafeERC4626, AccessManager {
 
     _burn(owner, shares);
 
-    uint256 uninvestedAssets = IERC20(asset()).balanceOf(address(this));
+    if (assets > idleAssets) {
+      uint256 amountToWithdraw;
 
-    if (assets > uninvestedAssets) {
-      underlyingVault.withdraw(assets - uninvestedAssets, address(this), address(this));
+      unchecked {
+        amountToWithdraw = assets - idleAssets;
+      }
+
+      uint256 sharesBurned = underlyingVault.withdraw(amountToWithdraw, address(this), address(this));
+      underlyingVaultShares -= sharesBurned;
+      idleAssets = 0;
+    } else {
+      idleAssets -= assets;
     }
 
-    SafeERC20.safeTransfer(IERC20(asset()), receiver, assets);
+    IERC20(asset()).safeTransfer(receiver, assets);
 
     emit Withdraw(caller, receiver, owner, assets, shares);
   }
@@ -190,10 +235,9 @@ contract CoveredVault is SafeERC4626, AccessManager {
 
   /** @dev See {IERC4626-totalAssets}. */
   function _totalAssets(bool preview) internal view override returns (uint256) {
-    uint256 underlyingShares = underlyingVault.balanceOf(address(this));
-    uint256 underlyingAssets = preview == true
-      ? underlyingVault.previewRedeem(underlyingShares)
-      : underlyingVault.convertToAssets(underlyingShares);
-    return underlyingAssets + ERC4626.totalAssets();
+    uint256 investedAssets = preview == true
+      ? underlyingVault.previewRedeem(underlyingVaultShares)
+      : underlyingVault.convertToAssets(underlyingVaultShares);
+    return investedAssets + idleAssets;
   }
 }
