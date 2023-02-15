@@ -4,7 +4,6 @@ import { constants } from "ethers";
 import { ethers } from "hardhat";
 import { deployVaultFixture, mintVaultSharesFixture } from "./utils/fixtures";
 import { getPermitSignature } from "./utils/getPermitSignature";
-import { increaseUVValue } from "./utils/helpers";
 
 const { parseEther } = ethers.utils;
 
@@ -67,19 +66,19 @@ describe("CoveredVault", function () {
 
       // Increase assets in underlying vault
       const increasedValue = assets;
-      await increaseUVValue(underlyingVault, underlyingAsset, increasedValue);
+      await underlyingAsset.mint(underlyingVault.address, increasedValue);
 
       // 1:2 rate
       expect(await vault.convertToShares(assets)).to.equal(shares.div(2));
 
       // Increase assets in underlying vault
-      await increaseUVValue(underlyingVault, underlyingAsset, increasedValue);
+      await underlyingAsset.mint(underlyingVault.address, increasedValue);
 
       // 1:3 rate
       expect(await vault.convertToShares(assets)).to.equal(shares.div(3));
 
       // Increase assets to underlying vault
-      await increaseUVValue(underlyingVault, underlyingAsset, increasedValue);
+      await underlyingAsset.mint(underlyingVault.address, increasedValue);
 
       // 1:4 rate
       expect(await vault.convertToShares(assets)).to.equal(shares.div(4));
@@ -117,19 +116,19 @@ describe("CoveredVault", function () {
 
       // Increase assets in underlying vault
       const increasedValue = assets;
-      await increaseUVValue(underlyingVault, underlyingAsset, increasedValue);
+      await underlyingAsset.mint(underlyingVault.address, increasedValue);
 
       // 1:2 rate
       expect(await vault.convertToAssets(shares)).to.equal(assets.mul(2));
 
       // Increase assets in underlying vault
-      await increaseUVValue(underlyingVault, underlyingAsset, increasedValue);
+      await underlyingAsset.mint(underlyingVault.address, increasedValue);
 
       // 1:3 rate
       expect(await vault.convertToAssets(shares)).to.equal(assets.mul(3));
 
       // Increase assets to underlying vault
-      await increaseUVValue(underlyingVault, underlyingAsset, increasedValue);
+      await underlyingAsset.mint(underlyingVault.address, increasedValue);
 
       // 1:4 rate
       expect(await vault.convertToAssets(shares)).to.equal(assets.mul(4));
@@ -166,19 +165,19 @@ describe("CoveredVault", function () {
 
       // Increase assets in underlying vault
       const increasedValue = depositAssets;
-      await increaseUVValue(underlyingVault, underlyingAsset, increasedValue);
+      await underlyingAsset.mint(underlyingVault.address, increasedValue);
 
       // 1:2 rate
       expect(await vault.previewDeposit(depositAssets)).to.equal(shares.div(2));
 
       // Increase assets in underlying vault
-      await increaseUVValue(underlyingVault, underlyingAsset, increasedValue);
+      await underlyingAsset.mint(underlyingVault.address, increasedValue);
 
       // 1:3 rate
       expect(await vault.previewDeposit(depositAssets)).to.equal(shares.div(3));
 
       // Increase assets in underlying vault
-      await increaseUVValue(underlyingVault, underlyingAsset, increasedValue);
+      await underlyingAsset.mint(underlyingVault.address, increasedValue);
 
       // 1:4 rate
       expect(await vault.previewDeposit(depositAssets)).to.equal(shares.div(4));
@@ -245,19 +244,19 @@ describe("CoveredVault", function () {
 
       // Increase assets in underlying vault
       const increasedValue = depositAssets;
-      await increaseUVValue(underlyingVault, underlyingAsset, increasedValue);
+      await underlyingAsset.mint(underlyingVault.address, increasedValue);
 
       // 1:2 rate
       expect(await vault.previewMint(mintShares)).to.equal(assets.mul(2));
 
       // Increase assets in underlying vault
-      await increaseUVValue(underlyingVault, underlyingAsset, increasedValue);
+      await underlyingAsset.mint(underlyingVault.address, increasedValue);
 
       // 1:3 rate
       expect(await vault.previewMint(mintShares)).to.equal(assets.mul(3));
 
       // Increase assets in underlying vault
-      await increaseUVValue(underlyingVault, underlyingAsset, increasedValue);
+      await underlyingAsset.mint(underlyingVault.address, increasedValue);
 
       // 1:4 rate
       expect(await vault.previewMint(mintShares)).to.equal(assets.mul(4));
@@ -334,7 +333,7 @@ describe("CoveredVault", function () {
       await vault.connect(admin).invest(depositAssets.mul(2));
       expect(await vault.idleAssets()).to.equal(0);
 
-      await increaseUVValue(underlyingVault, underlyingAsset, depositAssets);
+      await underlyingAsset.mint(underlyingVault.address, depositAssets);
       const uvShares = await underlyingVault.balanceOf(vault.address);
       await vault.connect(admin).uninvest(uvShares);
       expect(await vault.idleAssets()).to.equal(depositAssets.mul(3));
@@ -369,7 +368,7 @@ describe("CoveredVault", function () {
 
       // Deposit assets into underlying vault to the vault account
       await vault.connect(admin).invest(depositAssets);
-      await increaseUVValue(underlyingVault, underlyingAsset, depositAssets);
+      await underlyingAsset.mint(underlyingVault.address, depositAssets);
 
       expect(await vault.idleAssets()).to.equal(0);
 
@@ -444,7 +443,7 @@ describe("CoveredVault", function () {
       await vault.connect(admin).invest(depositAssets.mul(2));
       expect(await vault.idleAssets()).to.equal(0);
 
-      await increaseUVValue(underlyingVault, underlyingAsset, depositAssets);
+      await underlyingAsset.mint(underlyingVault.address, depositAssets);
       const uvShares = await underlyingVault.balanceOf(vault.address);
       await vault.connect(admin).uninvest(uvShares);
       expect(await vault.idleAssets()).to.equal(depositAssets.mul(3));
@@ -483,7 +482,7 @@ describe("CoveredVault", function () {
       await vault.connect(admin).invest(mintShares);
       expect(await vault.idleAssets()).to.equal(0);
 
-      await increaseUVValue(underlyingVault, underlyingAsset, mintShares);
+      await underlyingAsset.mint(underlyingVault.address, mintShares);
 
       const initialAssets = await underlyingAsset.balanceOf(user2.address);
 

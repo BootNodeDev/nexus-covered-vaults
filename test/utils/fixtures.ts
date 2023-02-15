@@ -1,7 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
-import { ERC20Mock, ERC4626Mock } from "../../typechain-types";
 
 const { parseEther } = ethers.utils;
 
@@ -9,12 +8,12 @@ const vaultName = "USDC Covered Vault";
 const vaultSymbol = "cvUSDC";
 
 export async function deployUnderlyingVaultFixture() {
-  const underlyingAsset = (await ethers.deployContract("ERC20Mock", ["USDC", "USDC"])) as ERC20Mock;
-  const underlyingVault = (await ethers.deployContract("ERC4626Mock", [
+  const underlyingAsset = await ethers.deployContract("ERC20Mock", ["USDC", "USDC"]);
+  const underlyingVault = await ethers.deployContract("ERC4626Mock", [
     underlyingAsset.address,
     "USDC Invest Vault",
     "ivUSDC",
-  ])) as ERC4626Mock;
+  ]);
 
   return { underlyingVault, underlyingAsset };
 }
