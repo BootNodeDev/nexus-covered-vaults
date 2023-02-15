@@ -77,6 +77,7 @@ describe("CoveredVault", function () {
       const amount = parseEther("1000");
 
       const initialIdleAssets = await vault.idleAssets();
+      const initialUnderlyingVaultShares = await vault.underlyingVaultShares();
 
       await expect(vault.connect(admin).invest(amount)).to.changeTokenBalances(
         underlyingAsset,
@@ -85,6 +86,7 @@ describe("CoveredVault", function () {
       );
 
       expect(await vault.idleAssets()).to.equal(initialIdleAssets.sub(amount));
+      expect(await vault.underlyingVaultShares()).to.equal(initialUnderlyingVaultShares.add(amount));
     });
 
     it("Should allow to invest some idle assets into the underlying vault", async function () {
@@ -94,6 +96,7 @@ describe("CoveredVault", function () {
       const amount = parseEther("1000");
 
       const initialIdleAssets = await vault.idleAssets();
+      const initialUnderlyingVaultShares = await vault.underlyingVaultShares();
 
       const investAmount = amount.div(2);
       await expect(vault.connect(admin).invest(investAmount)).to.changeTokenBalances(
@@ -103,6 +106,7 @@ describe("CoveredVault", function () {
       );
 
       expect(await vault.idleAssets()).to.equal(initialIdleAssets.sub(investAmount));
+      expect(await vault.underlyingVaultShares()).to.equal(initialUnderlyingVaultShares.add(investAmount));
     });
 
     it("Should revert if trying to invest more assets that the vault has", async function () {
@@ -169,6 +173,7 @@ describe("CoveredVault", function () {
       await vault.connect(admin).invest(amount);
 
       const initialIdleAssets = await vault.idleAssets();
+      const initialUnderlyingVaultShares = await vault.underlyingVaultShares();
 
       await expect(vault.connect(admin).uninvest(amount)).to.changeTokenBalances(
         underlyingAsset,
@@ -177,6 +182,7 @@ describe("CoveredVault", function () {
       );
 
       expect(await vault.idleAssets()).to.equal(initialIdleAssets.add(amount));
+      expect(await vault.underlyingVaultShares()).to.equal(initialUnderlyingVaultShares.sub(amount));
     });
 
     it("Should allow to uninvest active assets with returns out of the underlying vault", async function () {
@@ -188,6 +194,7 @@ describe("CoveredVault", function () {
       await vault.connect(admin).invest(amount);
 
       const initialIdleAssets = await vault.idleAssets();
+      const initialUnderlyingVaultShares = await vault.underlyingVaultShares();
 
       // 100% yield
       await underlyingAsset.mint(underlyingVault.address, amount);
@@ -199,6 +206,7 @@ describe("CoveredVault", function () {
       );
 
       expect(await vault.idleAssets()).to.equal(initialIdleAssets.add(amount.mul(2)));
+      expect(await vault.underlyingVaultShares()).to.equal(initialUnderlyingVaultShares.sub(amount));
     });
 
     it("Should emit an event with amount, shares and caller", async function () {
