@@ -139,6 +139,7 @@ contract CoveredVault is SafeERC4626, AccessManager {
   /**
    * @dev Purchase cover with this contract as owner
    * @param params buyCoverParams but replacing owner and productId for this contract address and defined productId
+   * @param coverChunkRequests pool allocations for buyCover
    */
   function buyCover(
     BuyCoverParams memory params,
@@ -146,8 +147,13 @@ contract CoveredVault is SafeERC4626, AccessManager {
   ) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
     params.owner = address(this);
     params.productId = productId;
+    params.coverId = coverId;
 
-    coverId = ICoverManager(coverManager).buyCover(params, coverChunkRequests);
+    uint256 newCoverId = ICoverManager(coverManager).buyCover(params, coverChunkRequests);
+
+    if (coverId == 0) {
+      coverId = newCoverId;
+    }
   }
 
   /**
