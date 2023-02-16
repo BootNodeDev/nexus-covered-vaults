@@ -26,7 +26,6 @@ contract CoveredVault is SafeERC4626, AccessManager {
   /**
    * @dev Role for botOperator
    */
-  /** @dev Role for botOperator */
   bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
 
   /** @dev Timelock for depositFee application */

@@ -205,9 +205,9 @@ describe("CoveredVault", function () {
       const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
 
       // Mint assets to user and deposit
-      await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
-      await underlyingAsset.connect(user1).approve(vault.address, ethers.utils.parseEther("1000"));
-      await vault.connect(user1)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), user1.address);
+      const userAmount = parseEther("10000");
+      await underlyingAsset.mint(user1.address, userAmount);
+      await underlyingAsset.connect(user1).approve(vault.address, userAmount);
 
       const depositAssets = ethers.utils.parseEther("1000");
 
@@ -329,11 +329,15 @@ describe("CoveredVault", function () {
       const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
 
       // Mint assets to user and deposit
-      await underlyingAsset.mint(user1.address, ethers.utils.parseEther("2000"));
-      await underlyingAsset.connect(user1).approve(vault.address, ethers.utils.parseEther("1000"));
-      await vault.connect(user1)["deposit(uint256,address)"](ethers.utils.parseEther("1000"), user1.address);
+      const userAmount = parseEther("10000");
+      await underlyingAsset.mint(user1.address, userAmount);
+      await underlyingAsset.connect(user1).approve(vault.address, userAmount);
 
-      const mintShares = ethers.utils.parseEther("1000");
+      const depositAssets = parseEther("1000");
+      await vault.connect(user1)["deposit(uint256,address)"](depositAssets, user1.address);
+
+      const mintShares = depositAssets;
+      const assets = mintShares;
 
       // 1:1 rate
       expect(await vault.previewMint(mintShares)).to.equal(
