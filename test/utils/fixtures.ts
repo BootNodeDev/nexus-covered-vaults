@@ -21,12 +21,22 @@ export async function deployUnderlyingVaultFixture() {
 export async function deployVaultFixture() {
   const { underlyingVault, underlyingAsset } = await deployUnderlyingVaultFixture();
   const { vaultFactory } = await deployVaultFactoryFixture();
+  const { coverManager } = await deployCoverManager();
+
   const [, , , admin] = await ethers.getSigners();
 
   let vaultAddress: string = "";
 
   await expect(
-    vaultFactory.create(underlyingVault.address, vaultName, vaultSymbol, admin.address, ethers.constants.MaxUint256),
+    vaultFactory.create(
+      underlyingVault.address,
+      vaultName,
+      vaultSymbol,
+      admin.address,
+      ethers.constants.MaxUint256,
+      1,
+      coverManager.address,
+    ),
   )
     .to.emit(vaultFactory, "CoveredVaultCreated")
     .withArgs((createdAddress: string) => {

@@ -3,6 +3,8 @@ pragma solidity 0.8.17;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+import { BuyCoverParams, PoolAllocationRequest } from "./interfaces/ICover.sol";
+import { ICoverManager } from "./interfaces/ICoverManager.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ERC4626 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -22,10 +24,15 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
 
+  /** @dev CoverId assigned on buyCover */
+  uint256 public coverId;
+
   /**
    * @dev Address of the underlying vault
    */
   IERC4626 public immutable underlyingVault;
+  uint24 public immutable productId;
+  ICoverManager public immutable coverManager;
 
   /**
    * @dev Maximum amount of assets that can be managed by the vault.
@@ -70,16 +77,21 @@ contract CoveredVault is SafeERC4626, AccessManager {
    * @param _symbol Symbol of the vault
    * @param _admin address' admin operator
    * @param _maxAssetsLimit New maximum asset amount limit
+   * @param _productId id of covered product
    */
   constructor(
     IERC4626 _underlyingVault,
     string memory _name,
     string memory _symbol,
     address _admin,
-    uint256 _maxAssetsLimit
+    uint256 _maxAssetsLimit,
+    uint24 _productId,
+    ICoverManager _coverManager
   ) SafeERC4626(IERC20(_underlyingVault.asset()), _name, _symbol) AccessManager(_admin) {
     underlyingVault = _underlyingVault;
     maxAssetsLimit = _maxAssetsLimit;
+    productId = _productId;
+    coverManager = _coverManager;
   }
 
   /* ========== User methods ========== */
@@ -123,6 +135,26 @@ contract CoveredVault is SafeERC4626, AccessManager {
   }
 
   /* ========== Admin methods ========== */
+
+  /**
+   * @dev Purchase cover with this contract as owner
+   * @param params buyCoverParams but replacing owner and productId for this contract address and defined productId
+   * @param coverChunkRequests pool allocations for buyCover
+   */
+  function buyCover(
+    BuyCoverParams memory params,
+    PoolAllocationRequest[] memory coverChunkRequests
+  ) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
+    params.owner = address(this);
+    params.productId = productId;
+    params.coverId = coverId;
+
+    uint256 newCoverId = ICoverManager(coverManager).buyCover(params, coverChunkRequests);
+
+    if (coverId == 0) {
+      coverId = newCoverId;
+    }
+  }
 
   /**
    * @dev Invest idle vault assets into the underlying vault. Only operator roles can call this method.
