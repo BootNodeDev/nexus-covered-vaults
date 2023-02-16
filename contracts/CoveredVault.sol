@@ -92,9 +92,10 @@ contract CoveredVault is SafeERC4626, AccessManager {
   event NewDepositFeeProposed(uint256 newFee);
 
   /* ========== Custom Errors ========== */
-  error CovererdVault__FeeOutOfBound();
-  error CovererdVault__FeeProposalNotFound();
-  error CovererdVault__FeeTimeLockNotDue();
+
+  error CoveredVault__FeeOutOfBound();
+  error CoveredVault__FeeProposalNotFound();
+  error CoveredVault__FeeTimeLockNotDue();
 
   /* ========== Constructor ========== */
 
@@ -227,7 +228,7 @@ contract CoveredVault is SafeERC4626, AccessManager {
    * @param _depositFee New fee percentage to charge users on deposit
    */
   function setDepositFee(uint256 _depositFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (_depositFee > FEE_DENOMINATOR) revert CovererdVault__FeeOutOfBound();
+    if (_depositFee > FEE_DENOMINATOR) revert CoveredVault__FeeOutOfBound();
 
     proposedDepositFee.newFee = _depositFee;
     proposedDepositFee.deadline = block.timestamp + FEE_TIME_LOCK;
@@ -237,8 +238,8 @@ contract CoveredVault is SafeERC4626, AccessManager {
    * @dev Sets the depositFee to his pending value if FEE_TIME_LOCK has passed.
    */
   function applyFee() external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (proposedDepositFee.deadline == 0) revert CovererdVault__FeeProposalNotFound();
-    if (block.timestamp < proposedDepositFee.deadline) revert CovererdVault__FeeTimeLockNotDue();
+    if (proposedDepositFee.deadline == 0) revert CoveredVault__FeeProposalNotFound();
+    if (block.timestamp < proposedDepositFee.deadline) revert CoveredVault__FeeTimeLockNotDue();
 
     depositFee = proposedDepositFee.newFee;
     delete proposedDepositFee;

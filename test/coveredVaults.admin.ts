@@ -429,7 +429,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).setDepositFee(fee)).to.revertedWithCustomError(
         vault,
-        "CovererdVault__FeeOutOfBound",
+        "CoveredVault__FeeOutOfBound",
       );
     });
   });
@@ -458,7 +458,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).applyFee()).to.revertedWithCustomError(
         vault,
-        "CovererdVault__FeeProposalNotFound",
+        "CoveredVault__FeeProposalNotFound",
       );
     });
 
@@ -475,7 +475,7 @@ describe("CoveredVault", function () {
       await vault.connect(admin).applyFee();
       await expect(vault.connect(admin).applyFee()).to.revertedWithCustomError(
         vault,
-        "CovererdVault__FeeProposalNotFound",
+        "CoveredVault__FeeProposalNotFound",
       );
     });
 
@@ -491,7 +491,7 @@ describe("CoveredVault", function () {
       await increase(timeLock.sub("60"));
       await expect(vault.connect(admin).applyFee()).to.revertedWithCustomError(
         vault,
-        "CovererdVault__FeeTimeLockNotDue",
+        "CoveredVault__FeeTimeLockNotDue",
       );
 
       await increase(BigNumber.from("60"));

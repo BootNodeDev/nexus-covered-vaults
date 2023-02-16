@@ -337,7 +337,7 @@ describe("CoveredVault", function () {
       await vault.connect(user1)["deposit(uint256,address)"](depositAssets, user1.address);
 
       const mintShares = depositAssets;
-      const assets = mintShares;
+      // const assets = mintShares;
 
       // 1:1 rate
       expect(await vault.previewMint(mintShares)).to.equal(
