@@ -441,12 +441,13 @@ describe("CoveredVault", function () {
 
       const fee = BigNumber.from(0.3 * 1e4);
       const timeLock = await vault.FEE_TIME_LOCK();
+      const adminRole = await vault.DEFAULT_ADMIN_ROLE();
 
       await vault.connect(admin).setDepositFee(fee);
 
       await increase(timeLock);
       await expect(vault.connect(user1).applyFee()).to.be.revertedWith(
-        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${await vault.DEFAULT_ADMIN_ROLE()}`,
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${adminRole}`,
       );
 
       await vault.connect(admin).applyFee();

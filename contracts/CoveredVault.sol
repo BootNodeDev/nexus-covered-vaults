@@ -56,6 +56,11 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   uint256 public underlyingVaultShares;
 
+  /**
+   * @dev Amount of accumulated fees for the admin to claim
+   */
+  uint256 public accumulatedFees;
+
   /** @dev Percentage charged to users on deposit on 1e4 units.
    * Helps to avoid short term deposits.
    * After construction is updated with `setDepositFee` and have effect after `applyDepositFee` is called with timelock due.
@@ -133,8 +138,9 @@ contract CoveredVault is SafeERC4626, AccessManager {
 
     uint256 shares = _convertToShares(newVaultAssets, Math.Rounding.Down, vaultTotalAssets);
     _deposit(_msgSender(), _receiver, _assets, shares);
+
     idleAssets += newVaultAssets;
-    _transferFees(fee);
+    accumulatedFees += fee;
 
     return shares;
   }
@@ -153,7 +159,7 @@ contract CoveredVault is SafeERC4626, AccessManager {
     uint256 fee = totalAssets - newVaultAssets;
 
     idleAssets += newVaultAssets;
-    _transferFees(fee);
+    accumulatedFees += fee;
 
     return newVaultAssets;
   }
@@ -245,6 +251,17 @@ contract CoveredVault is SafeERC4626, AccessManager {
     delete proposedDepositFee;
   }
 
+  /**
+   * @dev Transfers accumulated fees. Only Admin can call this method
+   * @param _to receiver of the claimed fees
+   */
+  function claimFees(address _to) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    uint256 _accumulatedFees = accumulatedFees;
+    accumulatedFees = 0;
+
+    IERC20(asset()).safeTransfer(_to, _accumulatedFees);
+  }
+
   /* ========== Internal methods ========== */
 
   /**
@@ -327,10 +344,5 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   function _calculateAmountIncludingFee(uint256 _amount, uint256 _fee) internal pure returns (uint256) {
     return (_amount * FEE_DENOMINATOR) / (FEE_DENOMINATOR - _fee);
-  }
-
-  /** @dev Transfer underlyingAsset amount of _fee to operator */
-  function _transferFees(uint256 _fee) internal returns (bool) {
-    return IERC20(asset()).transfer(getRoleMember(DEFAULT_ADMIN_ROLE, 0), _fee);
   }
 }
