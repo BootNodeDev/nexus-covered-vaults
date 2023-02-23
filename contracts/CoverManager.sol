@@ -16,11 +16,15 @@ import { IPool } from "./interfaces/IPool.sol";
 contract CoverManager is Ownable {
   using SafeERC20 for IERC20;
 
+  address public constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+
   address public immutable cover;
   address public immutable yieldTokenIncident;
   address public immutable pool;
 
   mapping(address => bool) public allowList;
+  // TODO Update solidity and use naming?
+  mapping(address => mapping(address => uint256)) public funds;
 
   /* ========== Events ========== */
 
@@ -34,6 +38,7 @@ contract CoverManager is Ownable {
   error CoverManager_AlreadyDisallowed();
   error CoverManager_SendingEthFailed();
   error CoverManager_EthNotExpected();
+  error CoverManager_InsufficientFunds();
 
   modifier onlyAllowed() {
     if (!allowList[msg.sender]) {
@@ -85,54 +90,111 @@ contract CoverManager is Ownable {
 
   /**
    * @dev Allows to call Cover.buyCover() on Nexus Mutual
-   * Gets caller funds to pay for the premium and returns the remaining
+   * Use available funds from caller to pay for the premium
    * @param params parameters to call buyCover
    * @param coverChunkRequests pool allocations for buyCover
    */
   function buyCover(
     BuyCoverParams calldata params,
     PoolAllocationRequest[] calldata coverChunkRequests
-  ) external payable onlyAllowed returns (uint256 coverId) {
-    uint256 initialBalance;
-    address asset;
+  ) external onlyAllowed returns (uint256 coverId) {
+    address asset = IPool(pool).getAsset(params.paymentAsset).assetAddress;
 
     bool isETH = params.paymentAsset == 0;
 
-    if (!isETH) {
-      if (msg.value != 0) revert CoverManager_EthNotExpected();
-
-      asset = IPool(pool).getAsset(params.paymentAsset).assetAddress;
-
-      initialBalance = IERC20(asset).balanceOf(address(this));
-
-      IERC20(asset).safeTransferFrom(msg.sender, address(this), params.maxPremiumInAsset);
-      IERC20(asset).safeApprove(cover, params.maxPremiumInAsset);
-    } else {
-      initialBalance = address(this).balance - msg.value;
+    if (funds[asset][msg.sender] < params.maxPremiumInAsset) {
+      revert CoverManager_InsufficientFunds();
     }
 
-    coverId = ICover(cover).buyCover{ value: msg.value }(params, coverChunkRequests);
+    if (!isETH) {
+      IERC20(asset).safeApprove(cover, params.maxPremiumInAsset);
+    }
 
+    uint256 initialBalance = isETH ? address(this).balance : IERC20(asset).balanceOf(address(this));
+    coverId = ICover(cover).buyCover(params, coverChunkRequests);
     uint256 finalBalance = isETH ? address(this).balance : IERC20(asset).balanceOf(address(this));
 
-    uint256 remaining = finalBalance - initialBalance;
-
-    // ETH/Asset unspent is returned to buyer
-    if (remaining > 0) {
-      if (isETH) {
-        // solhint-disable-next-line avoid-low-level-calls
-        (bool success, ) = address(msg.sender).call{ value: remaining }("");
-        if (!success) {
-          revert CoverManager_SendingEthFailed();
-        }
-      } else {
-        IERC20(asset).safeTransfer(msg.sender, remaining);
-        // reset allowance to 0 to comply with tokens that implement the anti frontrunning approval fix (ie. USDT)
-        IERC20(asset).safeApprove(cover, 0);
-      }
+    if (!isETH) {
+      // reset allowance to 0 to comply with tokens that implement the anti frontrunning approval fix (ie. USDT)
+      IERC20(asset).safeApprove(cover, 0);
     }
 
+    uint256 spent = finalBalance - initialBalance;
+
+    funds[asset][msg.sender] -= spent;
+
     return coverId;
+  }
+
+  /**
+   * @dev Allows to deposit assets to keep track of them for each depositor
+   * @param _asset asset deposited
+   * @param _amount amount of asset on behalf of _to
+   * @param _to address allowed to use deposited assets
+   */
+  function depositOnBehalf(address _asset, uint256 _amount, address _to) external {
+    // Validate _to to avoid losing funds
+    if (_to != msg.sender && allowList[_to] == false) {
+      revert CoverManager_NotAllowed();
+    }
+
+    IERC20(_asset).safeTransferFrom(msg.sender, address(this), _amount);
+    funds[_asset][_to] += _amount;
+  }
+
+  /**
+   * @dev Allows to deposit ETH to keep track of it for each depositor
+   * @param _to address allowed to use deposited ETH
+   */
+  function depositETHOnBehalf(address _to) external payable {
+    // Validate _to to avoid losing funds
+    if (allowList[_to] == false) {
+      revert CoverManager_NotAllowed(); // TODO use a different customError like _DepositNotAllowed()?
+    }
+
+    funds[ETH_ADDRESS][_to] += msg.value;
+  }
+
+  /**
+   * @dev Allows to withdraw deposited user' assets and ETH from funds
+   * @param _asset asset address to withdraw
+   * @param _amount amount to withdraw
+   * @param _to address to send withdrawn funds
+   */
+  function withdraw(address _asset, uint256 _amount, address _to) external {
+    if (_asset == ETH_ADDRESS) {
+      (bool success, ) = address(_to).call{ value: _amount }("");
+      if (!success) {
+        revert CoverManager_SendingEthFailed();
+      }
+    } else {
+      IERC20(_asset).safeTransfer(_to, _amount);
+    }
+
+    funds[_asset][msg.sender] -= _amount;
+  }
+
+  /**
+   * @dev Allows to withdraw deposited assets and ETH from funds
+   * @param _asset asset address to withdraw
+   * @param _amount amount to withdraw
+   * @param _to address to send withdrawn funds
+   */
+  function withdrawCoverManagerAssets(address _asset, uint256 _amount, address _to) external onlyOwner {
+    if (_to == address(this)) {
+      revert("Send funds to a new address"); // TDOO use custom
+    }
+
+    if (_asset == ETH_ADDRESS) {
+      (bool success, ) = address(_to).call{ value: _amount }("");
+      if (!success) {
+        revert CoverManager_SendingEthFailed();
+      }
+    } else {
+      IERC20(_asset).safeTransfer(_to, _amount);
+    }
+
+    // TODO We should be able to iterate over funds to update the amounts
   }
 
   /**
