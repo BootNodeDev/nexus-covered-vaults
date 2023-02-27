@@ -7,6 +7,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import { ICover, BuyCoverParams, PoolAllocationRequest } from "./interfaces/ICover.sol";
 import { IPool } from "./interfaces/IPool.sol";
+import { console } from "hardhat/console.sol";
 
 /**
  * @title CoverManager
@@ -37,7 +38,6 @@ contract CoverManager is Ownable {
   error CoverManager_AlreadyAllowed();
   error CoverManager_AlreadyDisallowed();
   error CoverManager_SendingEthFailed();
-  error CoverManager_EthNotExpected();
   error CoverManager_InsufficientFunds();
 
   modifier onlyAllowed() {
@@ -111,7 +111,9 @@ contract CoverManager is Ownable {
     }
 
     uint256 initialBalance = isETH ? address(this).balance : IERC20(asset).balanceOf(address(this));
-    coverId = ICover(cover).buyCover(params, coverChunkRequests);
+    coverId = isETH
+      ? ICover(cover).buyCover{ value: params.amount }(params, coverChunkRequests)
+      : ICover(cover).buyCover(params, coverChunkRequests);
     uint256 finalBalance = isETH ? address(this).balance : IERC20(asset).balanceOf(address(this));
 
     if (!isETH) {
@@ -119,7 +121,7 @@ contract CoverManager is Ownable {
       IERC20(asset).safeApprove(cover, 0);
     }
 
-    uint256 spent = finalBalance - initialBalance;
+    uint256 spent = initialBalance - finalBalance;
 
     funds[asset][msg.sender] -= spent;
 
@@ -163,6 +165,7 @@ contract CoverManager is Ownable {
    */
   function withdraw(address _asset, uint256 _amount, address _to) external {
     if (_asset == ETH_ADDRESS) {
+      // solhint-disable-next-line avoid-low-level-calls
       (bool success, ) = address(_to).call{ value: _amount }("");
       if (!success) {
         revert CoverManager_SendingEthFailed();
@@ -186,6 +189,7 @@ contract CoverManager is Ownable {
     }
 
     if (_asset == ETH_ADDRESS) {
+      // solhint-disable-next-line avoid-low-level-calls
       (bool success, ) = address(_to).call{ value: _amount }("");
       if (!success) {
         revert CoverManager_SendingEthFailed();
