@@ -9,6 +9,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ICover, BuyCoverParams, PoolAllocationRequest, CoverData, Product, CoverSegment } from "./interfaces/ICover.sol";
 import { IPool } from "./interfaces/IPool.sol";
 import { IYieldTokenIncidents } from "./interfaces/IYieldTokenIncidents.sol";
+import { ICoverNFT } from "./interfaces/ICoverNFT.sol";
 
 /**
  * @title CoverManager
@@ -43,6 +44,7 @@ contract CoverManager is Ownable, ReentrancyGuard {
   error CoverManager_SendingEthFailed();
   error CoverManager_InsufficientFunds();
   error CoverManager_DepositNotAllowed();
+  error CoverManager_EthNotExpected();
   error CoverManager_NotCoverNFTOwner();
 
   modifier onlyAllowed() {

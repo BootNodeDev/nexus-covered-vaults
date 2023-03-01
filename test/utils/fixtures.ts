@@ -80,6 +80,7 @@ type CoverManagerFixture = Promise<{
   cover: CoverMock;
   coverManager: CoverManager;
 }>;
+
 export async function deployCoverManager() {
   const [, , , , owner] = await ethers.getSigners();
 
