@@ -7,6 +7,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ICover, BuyCoverParams, PoolAllocationRequest } from "./interfaces/ICover.sol";
 import { IPool } from "./interfaces/IPool.sol";
+import { ICoverNFT } from "./interfaces/ICoverNFT.sol";
 
 /**
  * @title CoverManager
@@ -41,6 +42,8 @@ contract CoverManager is Ownable, ReentrancyGuard {
   error CoverManager_SendingEthFailed();
   error CoverManager_InsufficientFunds();
   error CoverManager_DepositNotAllowed();
+  error CoverManager_EthNotExpected();
+  error CoverManager_NotCoverNFTOwner();
 
   modifier onlyAllowed() {
     if (!allowList[msg.sender]) revert CoverManager_NotAllowed();
@@ -126,6 +129,12 @@ contract CoverManager is Ownable, ReentrancyGuard {
     funds[asset][msg.sender] -= spent;
 
     return coverId;
+  }
+
+  function redeemCover(uint256 coverId) external onlyAllowed {
+    if (ICover(cover).coverNFT().ownerOf(coverId) != msg.sender) {
+      revert CoverManager_NotCoverNFTOwner();
+    }
   }
 
   /**

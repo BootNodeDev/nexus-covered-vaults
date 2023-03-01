@@ -157,4 +157,35 @@ describe("CoverManager", function () {
       expect(balanceAfter).to.be.eq(balanceBefore.sub(premiumAmount));
     });
   });
+
+  describe.only("redeemCover", function () {
+    it("Should revert if caller is not allowed", async () => {
+      const { coverManager, coverNFT } = await loadFixture(deployCoverManager);
+      const [user1, , , , kycUser] = await ethers.getSigners();
+
+      await expect(coverManager.connect(user1).redeemCover(1)).to.be.revertedWithCustomError(
+        coverManager,
+        "CoverManager_NotAllowed",
+      );
+
+      await coverNFT.connect(kycUser).mint(user1.address, 1);
+      await coverManager.connect(kycUser).addToAllowList(user1.address);
+      await expect(coverManager.connect(user1).redeemCover(1)).to.not.be.reverted;
+    });
+
+    it("Should revert if caller is not the owner of coverNFT", async () => {
+      const { coverManager, coverNFT } = await loadFixture(deployCoverManager);
+      const [user1, user2, , , kycUser] = await ethers.getSigners();
+
+      await coverNFT.connect(kycUser).mint(user1.address, 1);
+      await coverNFT.connect(kycUser).mint(user2.address, 2);
+      await coverManager.connect(kycUser).addToAllowList(user1.address);
+      await expect(coverManager.connect(user1).redeemCover(2)).to.be.revertedWithCustomError(
+        coverManager,
+        "CoverManager_NotCoverNFTOwner",
+      );
+
+      await expect(coverManager.connect(user1).redeemCover(1)).to.not.be.reverted;
+    });
+  });
 });

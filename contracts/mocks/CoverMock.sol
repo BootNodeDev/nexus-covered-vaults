@@ -5,9 +5,12 @@ import { BuyCoverParams, PoolAllocationRequest } from "./../interfaces/ICover.so
 import { IPool } from "./../interfaces/IPool.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 contract CoverMock {
   address public pool;
+  IERC721 public coverNFT;
+
   uint256 public constant PREMIUM_DENOMINATOR = 1e4;
   uint256 public premium = 100; // 1%
   uint256 public coverId = 1;
@@ -17,8 +20,9 @@ contract CoverMock {
   error CoverMock_InsufficientETHForPremium();
   error CoverMock_EthSendFailed();
 
-  constructor(address _pool) {
+  constructor(address _pool, address _coverNFT) {
     pool = _pool;
+    coverNFT = IERC721(_coverNFT);
   }
 
   function setPremium(uint256 _premium) public {

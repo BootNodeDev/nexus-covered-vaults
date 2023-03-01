@@ -1,6 +1,8 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: UNLICENSED
 
 pragma solidity 0.8.17;
+
+import { ICoverNFT } from "./ICoverNFT.sol";
 
 struct PoolAllocationRequest {
   uint40 poolId;
@@ -27,4 +29,6 @@ interface ICover {
     BuyCoverParams calldata params,
     PoolAllocationRequest[] calldata coverChunkRequests
   ) external payable returns (uint256 coverId);
+
+  function coverNFT() external returns (ICoverNFT);
 }
