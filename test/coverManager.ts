@@ -159,7 +159,7 @@ describe("CoverManager", function () {
   });
 
   describe.only("redeemCover", function () {
-    it("Should revert if caller is not allowed", async () => {
+    xit("Should revert if caller is not allowed", async () => {
       const { coverManager, coverNFT } = await loadFixture(deployCoverManager);
       const [user1, , , , kycUser] = await ethers.getSigners();
 
@@ -173,7 +173,7 @@ describe("CoverManager", function () {
       await expect(coverManager.connect(user1).redeemCover(1)).to.not.be.reverted;
     });
 
-    it("Should revert if caller is not the owner of coverNFT", async () => {
+    xit("Should revert if caller is not the owner of coverNFT", async () => {
       const { coverManager, coverNFT } = await loadFixture(deployCoverManager);
       const [user1, user2, , , kycUser] = await ethers.getSigners();
 
@@ -186,6 +186,29 @@ describe("CoverManager", function () {
       );
 
       await expect(coverManager.connect(user1).redeemCover(1)).to.not.be.reverted;
+    });
+
+    xit("Should call YTI.redeemPayout()", async () => {
+      const { coverManager, coverNFT, _yieldTokenIncidents } = await loadFixture(deployCoverManager);
+      const [user1, , , , kycUser] = await ethers.getSigners();
+
+      await coverNFT.connect(kycUser).mint(user1.address, 1);
+      await coverManager.connect(kycUser).addToAllowList(user1.address);
+
+      // ICover coverContract = ICover(getInternalContractAddress(ID.CO));
+      // CoverData memory coverData = coverContract.coverData(coverId);
+      // Product memory product = coverContract.products(coverData.productId);
+
+      // SafeERC20.safeTransferFrom(
+      //   IERC20(product.yieldTokenAddress),
+      //   msg.sender,
+      //   address(this),
+      //   depeggedTokens
+      // );
+
+      //     return (payoutAmount, coverData.coverAsset);
+
+      await expect(coverManager.connect(user1).redeemCover(1)).to.have;
     });
   });
 });

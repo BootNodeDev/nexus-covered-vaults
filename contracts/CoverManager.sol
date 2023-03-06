@@ -5,9 +5,11 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { ICover, BuyCoverParams, PoolAllocationRequest } from "./interfaces/ICover.sol";
+
+import { ICover, BuyCoverParams, PoolAllocationRequest, CoverData, Product } from "./interfaces/ICover.sol";
 import { IPool } from "./interfaces/IPool.sol";
 import { ICoverNFT } from "./interfaces/ICoverNFT.sol";
+import { IYieldTokenIncidents } from "./interfaces/IYTI.sol";
 
 /**
  * @title CoverManager
@@ -131,10 +133,46 @@ contract CoverManager is Ownable, ReentrancyGuard {
     return coverId;
   }
 
-  function redeemCover(uint256 coverId) external onlyAllowed {
+  // TODO Improve
+  /**
+   * @dev Allows to call Yield Token Incident' redeem cover
+   * Gets caller depeggedTokens to pay.
+   * @param incidentId identifier of YTI
+   * @param coverId number of cover
+   * @param segmentId segment Id for cover
+   * @param depeggedTokens number of tokens to send
+   * @param payoutAddress address to receive payout
+   * @param optionalParams extra params
+   */
+  function redeemCover(
+    uint104 incidentId,
+    uint32 coverId,
+    uint256 segmentId,
+    uint256 depeggedTokens,
+    address payable payoutAddress,
+    bytes calldata optionalParams
+  ) external onlyAllowed returns (uint256 payoutAmount, uint8 coverAsset) {
     if (ICover(cover).coverNFT().ownerOf(coverId) != msg.sender) {
       revert CoverManager_NotCoverNFTOwner();
     }
+
+    CoverData memory coverData = ICover(cover).coverData(coverId);
+    Product memory product = ICover(cover).products(coverData.productId);
+    address yieldTokenAddress = product.yieldTokenAddress;
+
+    IERC20(yieldTokenAddress).safeTransferFrom(msg.sender, address(this), depeggedTokens);
+    IERC20(yieldTokenAddress).approve(yieldTokenIncident, depeggedTokens);
+
+    (payoutAmount, coverAsset) = IYieldTokenIncidents(yieldTokenIncident).redeemPayout(
+      incidentId,
+      coverId,
+      segmentId,
+      depeggedTokens,
+      payoutAddress,
+      optionalParams
+    );
+
+    return (payoutAmount, coverAsset);
   }
 
   /**

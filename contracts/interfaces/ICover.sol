@@ -24,6 +24,32 @@ struct BuyCoverParams {
   string ipfsData;
 }
 
+struct CoverData {
+  uint24 productId;
+  uint8 coverAsset;
+  uint96 amountPaidOut;
+}
+
+struct Product {
+  uint16 productType;
+  address yieldTokenAddress;
+  // cover assets bitmap. each bit represents whether the asset with
+  // the index of that bit is enabled as a cover asset for this product
+  uint32 coverAssets;
+  uint16 initialPriceRatio;
+  uint16 capacityReductionRatio;
+  bool isDeprecated;
+  bool useFixedPrice;
+}
+
+struct ProductParam {
+  string productName;
+  uint productId;
+  string ipfsMetadata;
+  Product product;
+  uint[] allowedPools;
+}
+
 interface ICover {
   function buyCover(
     BuyCoverParams calldata params,
@@ -31,4 +57,8 @@ interface ICover {
   ) external payable returns (uint256 coverId);
 
   function coverNFT() external returns (ICoverNFT);
+
+  function coverData(uint coverId) external view returns (CoverData memory);
+
+  function products(uint id) external view returns (Product memory);
 }
