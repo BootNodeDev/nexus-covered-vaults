@@ -2,6 +2,7 @@
 pragma solidity 0.8.17;
 
 import { CoveredVault } from "./CoveredVault.sol";
+import { ICoverManager } from "./interfaces/ICoverManager.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 /**
@@ -18,6 +19,9 @@ contract CoveredVaultFactory {
    * @param _symbol Symbol of the vault
    * @param _admin address' admin operator
    * @param _maxAssetsLimit New maximum asset amount limit
+   * @param _productId productId to cover
+   * @param _coverManager CoverManager used to interact with Nexus
+
    * @param _depositFee Fee for new deposits
    */
   function create(
@@ -26,9 +30,20 @@ contract CoveredVaultFactory {
     string memory _symbol,
     address _admin,
     uint256 _maxAssetsLimit,
+    uint24 _productId,
+    ICoverManager _coverManager,
     uint256 _depositFee
   ) external returns (address) {
-    CoveredVault vault = new CoveredVault(_underlyingVault, _name, _symbol, _admin, _maxAssetsLimit, _depositFee);
+    CoveredVault vault = new CoveredVault(
+      _underlyingVault,
+      _name,
+      _symbol,
+      _admin,
+      _maxAssetsLimit,
+      _productId,
+      _coverManager,
+      _depositFee
+    );
 
     emit CoveredVaultCreated(address(vault));
 

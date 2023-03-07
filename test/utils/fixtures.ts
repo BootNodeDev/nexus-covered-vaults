@@ -23,6 +23,8 @@ export const deployVaultFixture = async () => deployVaultFixtureCreator();
 async function deployVaultFixtureCreator(fee = 0) {
   const { underlyingVault, underlyingAsset } = await deployUnderlyingVaultFixture();
   const { vaultFactory } = await deployVaultFactoryFixture();
+  const { coverManager } = await deployCoverManager();
+
   const [, , , admin] = await ethers.getSigners();
 
   let vaultAddress: string = "";
@@ -35,6 +37,8 @@ async function deployVaultFixtureCreator(fee = 0) {
       vaultSymbol,
       admin.address,
       ethers.constants.MaxUint256,
+      1,
+      coverManager.address,
       depositFee,
     ),
   )

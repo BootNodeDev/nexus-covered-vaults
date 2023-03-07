@@ -12,7 +12,6 @@ describe("CoveredVaultFactory", function () {
     it("Should deploy a new vault", async function () {
       const { underlyingVault, underlyingAsset } = await loadFixture(deployUnderlyingVaultFixture);
       const { vaultFactory } = await loadFixture(deployVaultFactoryFixture);
-
       const [, , , admin] = await ethers.getSigners();
       let vaultAddress: string = "";
       const depositFee = 0.3 * 1e4; // 3%
@@ -25,6 +24,8 @@ describe("CoveredVaultFactory", function () {
           vaultSymbol,
           admin.address,
           ethers.constants.MaxUint256,
+          1,
+          ethers.constants.AddressZero,
           depositFee,
         ),
       )
