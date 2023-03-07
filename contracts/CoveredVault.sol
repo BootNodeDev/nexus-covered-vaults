@@ -30,20 +30,34 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
 
-  /** @dev Timelock for depositFee application */
+  /**
+   *  @dev Timelock for depositFee application
+   */
   uint256 public constant FEE_TIME_LOCK = 2 weeks;
 
-  /** @dev fee denominator 100% with two decimals */
+  /**
+   * @dev fee denominator 100% with two decimals
+   */
   uint256 public constant FEE_DENOMINATOR = 1e4;
 
-  /** @dev CoverId assigned on buyCover */
+  /**
+   * @dev CoverId assigned on buyCover
+   */
   uint256 public coverId;
 
   /**
    * @dev Address of the underlying vault
    */
   IERC4626 public immutable underlyingVault;
+
+  /**
+   * @dev Id of the nexus product id
+   */
   uint24 public immutable productId;
+
+  /**
+   * @dev Address of the cover manager contract
+   */
   ICoverManager public immutable coverManager;
 
   /**
@@ -68,12 +82,16 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   uint256 public accumulatedFees;
 
-  /** @dev Percentage charged to users on deposit on 1e4 units.
+  /**
+   * @dev Percentage charged to users on deposit on 1e4 units.
    * Helps to avoid short term deposits.
    * After construction is updated with `setDepositFee` and have effect after `applyDepositFee` is called with timelock due.
    */
   uint256 public depositFee;
 
+  /**
+   * @dev New proposed deposit fee
+   */
   ProposedDepositFee public proposedDepositFee;
 
   /* ========== Events ========== */
@@ -116,9 +134,10 @@ contract CoveredVault is SafeERC4626, AccessManager {
    * @param _underlyingVault Underlying vault ERC4626-compatible contract
    * @param _name Name of the vault
    * @param _symbol Symbol of the vault
-   * @param _admin address' admin operator
+   * @param _admin address of admin operator
    * @param _maxAssetsLimit New maximum asset amount limit
    * @param _productId id of covered product
+   * @param _coverManager address of cover manager contract
    * @param _depositFee Fee for new deposits
    */
   constructor(
