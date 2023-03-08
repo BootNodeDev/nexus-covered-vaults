@@ -10,7 +10,6 @@ import { ERC4626 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { AccessManager } from "./vault/AccessManager.sol";
 import { SafeERC4626 } from "./vault/SafeERC4626.sol";
-import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
  * @title CoveredVault
