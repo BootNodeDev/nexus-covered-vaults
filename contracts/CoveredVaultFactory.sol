@@ -22,6 +22,7 @@ contract CoveredVaultFactory {
    * @param _productId productId to cover
    * @param _coverManager CoverManager used to interact with Nexus
 
+   * @param _depositFee Fee for new deposits
    */
   function create(
     IERC4626 _underlyingVault,
@@ -30,7 +31,8 @@ contract CoveredVaultFactory {
     address _admin,
     uint256 _maxAssetsLimit,
     uint24 _productId,
-    ICoverManager _coverManager
+    ICoverManager _coverManager,
+    uint256 _depositFee
   ) external returns (address) {
     CoveredVault vault = new CoveredVault(
       _underlyingVault,
@@ -39,7 +41,8 @@ contract CoveredVaultFactory {
       _admin,
       _maxAssetsLimit,
       _productId,
-      _coverManager
+      _coverManager,
+      _depositFee
     );
 
     emit CoveredVaultCreated(address(vault));

@@ -19,19 +19,44 @@ import { SafeERC4626 } from "./vault/SafeERC4626.sol";
 contract CoveredVault is SafeERC4626, AccessManager {
   using SafeERC20 for IERC20;
 
+  struct ProposedDepositFee {
+    uint256 deadline;
+    uint256 newFee;
+  }
+
   /**
    * @dev Role for botOperator
    */
   bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
 
-  /** @dev CoverId assigned on buyCover */
+  /**
+   *  @dev Timelock for depositFee application
+   */
+  uint256 public constant FEE_TIME_LOCK = 2 weeks;
+
+  /**
+   * @dev fee denominator 100% with two decimals
+   */
+  uint256 public constant FEE_DENOMINATOR = 1e4;
+
+  /**
+   * @dev CoverId assigned on buyCover
+   */
   uint256 public coverId;
 
   /**
    * @dev Address of the underlying vault
    */
   IERC4626 public immutable underlyingVault;
+
+  /**
+   * @dev Id of the nexus product id
+   */
   uint24 public immutable productId;
+
+  /**
+   * @dev Address of the cover manager contract
+   */
   ICoverManager public immutable coverManager;
 
   /**
@@ -51,6 +76,23 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   uint256 public underlyingVaultShares;
 
+  /**
+   * @dev Amount of accumulated fees for the admin to claim
+   */
+  uint256 public accumulatedFees;
+
+  /**
+   * @dev Percentage charged to users on deposit on 1e4 units.
+   * Helps to avoid short term deposits.
+   * After construction is updated with `setDepositFee` and have effect after `applyDepositFee` is called with timelock due.
+   */
+  uint256 public depositFee;
+
+  /**
+   * @dev New proposed deposit fee
+   */
+  ProposedDepositFee public proposedDepositFee;
+
   /* ========== Events ========== */
 
   /**
@@ -68,6 +110,23 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   event MaxAssetsLimitUpdated(uint256 newLimit);
 
+  /**
+   * @dev Emitted when the deposit fee changes effectively
+   */
+  event DepositFeeUpdated(uint256 newFee);
+
+  /**
+   * @dev Emitted when the deposit fee is set to be changed
+   */
+  event NewDepositFeeProposed(uint256 newFee);
+
+  /* ========== Custom Errors ========== */
+
+  error CoveredVault__FeeOutOfBound();
+  error CoveredVault__FeeProposalNotFound();
+  error CoveredVault__FeeTimeLockNotDue();
+  error CoveredVault__NoFeesToClaim();
+
   /* ========== Constructor ========== */
 
   /**
@@ -75,9 +134,11 @@ contract CoveredVault is SafeERC4626, AccessManager {
    * @param _underlyingVault Underlying vault ERC4626-compatible contract
    * @param _name Name of the vault
    * @param _symbol Symbol of the vault
-   * @param _admin address' admin operator
+   * @param _admin address of admin operator
    * @param _maxAssetsLimit New maximum asset amount limit
    * @param _productId id of covered product
+   * @param _coverManager address of cover manager contract
+   * @param _depositFee Fee for new deposits
    */
   constructor(
     IERC4626 _underlyingVault,
@@ -86,12 +147,14 @@ contract CoveredVault is SafeERC4626, AccessManager {
     address _admin,
     uint256 _maxAssetsLimit,
     uint24 _productId,
-    ICoverManager _coverManager
+    ICoverManager _coverManager,
+    uint256 _depositFee
   ) SafeERC4626(IERC20(_underlyingVault.asset()), _name, _symbol) AccessManager(_admin) {
     underlyingVault = _underlyingVault;
     maxAssetsLimit = _maxAssetsLimit;
     productId = _productId;
     coverManager = _coverManager;
+    depositFee = _depositFee;
   }
 
   /* ========== User methods ========== */
@@ -101,9 +164,14 @@ contract CoveredVault is SafeERC4626, AccessManager {
     (uint256 maxAvailableDeposit, uint256 vaultTotalAssets) = _maxDeposit(_receiver);
     if (_assets > maxAvailableDeposit) revert BaseERC4626__DepositMoreThanMax();
 
-    uint256 shares = _convertToShares(_assets, Math.Rounding.Down, vaultTotalAssets);
+    uint256 fee = _calculateFee(_assets, depositFee);
+    uint256 newVaultAssets = _assets - fee;
+
+    uint256 shares = _convertToShares(newVaultAssets, Math.Rounding.Down, vaultTotalAssets);
     _deposit(_msgSender(), _receiver, _assets, shares);
-    idleAssets += _assets;
+
+    idleAssets += newVaultAssets;
+    accumulatedFees += fee;
 
     return shares;
   }
@@ -113,11 +181,18 @@ contract CoveredVault is SafeERC4626, AccessManager {
     (uint256 maxAvailableMint, uint256 vaultTotalAssets) = _maxMint(_receiver);
     if (_shares > maxAvailableMint) revert BaseERC4626__MintMoreThanMax();
 
-    uint256 assets = _convertToAssets(_shares, Math.Rounding.Up, vaultTotalAssets);
-    _deposit(_msgSender(), _receiver, assets, _shares);
-    idleAssets += assets;
+    // Calculate the amount of assets that will be accounted for the vault for the shares
+    uint256 newVaultAssets = _convertToAssets(_shares, Math.Rounding.Up, vaultTotalAssets);
+    // Calculates the amount of assets the user needs to transfer for the required shares and the fees
+    uint256 totalAssets = _calculateAmountIncludingFee(newVaultAssets, depositFee);
 
-    return assets;
+    _deposit(_msgSender(), _receiver, totalAssets, _shares);
+    uint256 fee = totalAssets - newVaultAssets;
+
+    idleAssets += newVaultAssets;
+    accumulatedFees += fee;
+
+    return newVaultAssets;
   }
 
   /** @dev See {IERC4626-withdraw}. */
@@ -132,6 +207,19 @@ contract CoveredVault is SafeERC4626, AccessManager {
   /** @dev See {IERC4626-redeem}. */
   function redeem(uint256 _shares, address _receiver, address _owner) public override whenNotPaused returns (uint256) {
     return super.redeem(_shares, _receiver, _owner);
+  }
+
+  /** @dev See {IERC4626-previewDeposit}. */
+  function previewDeposit(uint256 assets) public view override returns (uint256) {
+    uint256 fee = _calculateFee(assets, depositFee);
+    return _convertToShares(assets - fee, Math.Rounding.Down, false);
+  }
+
+  /** @dev See {IERC4626-previewMint}. */
+  function previewMint(uint256 shares) public view override returns (uint256) {
+    uint256 sharesIncludingFee = _calculateAmountIncludingFee(shares, depositFee);
+
+    return _convertToAssets(sharesIncludingFee, Math.Rounding.Up, false);
   }
 
   /* ========== Admin methods ========== */
@@ -192,6 +280,41 @@ contract CoveredVault is SafeERC4626, AccessManager {
     emit MaxAssetsLimitUpdated(_maxAssetsLimit);
   }
 
+  /**
+   * @dev Sets the depositFee to be applied after FEE_TIME_LOCK has passed.
+   * @param _depositFee New fee percentage to charge users on deposit
+   */
+  function setDepositFee(uint256 _depositFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    if (_depositFee > FEE_DENOMINATOR) revert CoveredVault__FeeOutOfBound();
+
+    proposedDepositFee.newFee = _depositFee;
+    proposedDepositFee.deadline = block.timestamp + FEE_TIME_LOCK;
+  }
+
+  /**
+   * @dev Sets the depositFee to his pending value if FEE_TIME_LOCK has passed.
+   */
+  function applyFee() external onlyRole(DEFAULT_ADMIN_ROLE) {
+    if (proposedDepositFee.deadline == 0) revert CoveredVault__FeeProposalNotFound();
+    if (block.timestamp < proposedDepositFee.deadline) revert CoveredVault__FeeTimeLockNotDue();
+
+    depositFee = proposedDepositFee.newFee;
+    delete proposedDepositFee;
+  }
+
+  /**
+   * @dev Transfers accumulated fees. Only Admin can call this method
+   * @param _to receiver of the claimed fees
+   */
+  function claimFees(address _to) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    uint256 _accumulatedFees = accumulatedFees;
+
+    if (_accumulatedFees == 0) revert CoveredVault__NoFeesToClaim();
+
+    accumulatedFees = 0;
+    IERC20(asset()).safeTransfer(_to, _accumulatedFees);
+  }
+
   /* ========== Internal methods ========== */
 
   /**
@@ -245,5 +368,34 @@ contract CoveredVault is SafeERC4626, AccessManager {
       ? underlyingVault.previewRedeem(underlyingVaultShares)
       : underlyingVault.convertToAssets(underlyingVaultShares);
     return investedAssets + idleAssets;
+  }
+
+  /**
+   * @dev Calculates the fee to be subtracted from an amount
+   * feeAmount = _amount * FeeN / FeeD
+   * @param _amount total amount
+   * @param _fee fee numerator to be applied
+   * @return the quantity of _amount to be considered as a fee
+   */
+  function _calculateFee(uint256 _amount, uint256 _fee) internal pure returns (uint256) {
+    return (_amount * _fee) / FEE_DENOMINATOR;
+  }
+
+  /**
+   * @dev Calculates the total amount from an amount that already got fees subtracted
+   * totalAmount = _amount + feeAmount
+   * totalAmount = _amount + totalAmount * FeeN/ FeeD
+   * totalAmount - totalAmount * FeeN/ FeeD = _amount
+   * totalAmount * (1 - FeeN/ FeeD) = _amount
+   * totalAmount = _amount / (1 - FeeN/ FeeD)
+   * totalAmount = (_amount / (1 - FeeN/ FeeD)) * (FeeD / FeeD)
+   * totalAmount = _amount * FeeD / (FeeD * (1 - FeeN/ FeeD))
+   * totalAmount = _amount * FeeD / (FeeD - FeeN)
+   * @param _amount amount
+   * @param _fee fee numerator to be applied
+   * @return the amount from which after subtracting the fee would result in _amount
+   */
+  function _calculateAmountIncludingFee(uint256 _amount, uint256 _fee) internal pure returns (uint256) {
+    return (_amount * FEE_DENOMINATOR) / (FEE_DENOMINATOR - _fee);
   }
 }

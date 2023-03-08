@@ -14,6 +14,7 @@ describe("CoveredVaultFactory", function () {
       const { vaultFactory } = await loadFixture(deployVaultFactoryFixture);
       const [, , , admin] = await ethers.getSigners();
       let vaultAddress: string = "";
+      const depositFee = 0.3 * 1e4; // 3%
 
       // deploy new vault
       await expect(
@@ -25,6 +26,7 @@ describe("CoveredVaultFactory", function () {
           ethers.constants.MaxUint256,
           1,
           ethers.constants.AddressZero,
+          depositFee,
         ),
       )
         .to.emit(vaultFactory, "CoveredVaultCreated")

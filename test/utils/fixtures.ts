@@ -18,7 +18,9 @@ export async function deployUnderlyingVaultFixture() {
   return { underlyingVault, underlyingAsset };
 }
 
-export async function deployVaultFixture() {
+export const deployVaultFixture = async () => deployVaultFixtureCreator();
+
+async function deployVaultFixtureCreator(fee = 0) {
   const { underlyingVault, underlyingAsset } = await deployUnderlyingVaultFixture();
   const { vaultFactory } = await deployVaultFactoryFixture();
   const { coverManager } = await deployCoverManager();
@@ -26,6 +28,7 @@ export async function deployVaultFixture() {
   const [, , , admin] = await ethers.getSigners();
 
   let vaultAddress: string = "";
+  const depositFee = fee * 1e4;
 
   await expect(
     vaultFactory.create(
@@ -36,6 +39,7 @@ export async function deployVaultFixture() {
       ethers.constants.MaxUint256,
       1,
       coverManager.address,
+      depositFee,
     ),
   )
     .to.emit(vaultFactory, "CoveredVaultCreated")
