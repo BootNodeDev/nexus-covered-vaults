@@ -126,6 +126,7 @@ contract CoveredVault is SafeERC4626, AccessManager {
   error CoveredVault__FeeOutOfBound();
   error CoveredVault__FeeProposalNotFound();
   error CoveredVault__FeeTimeLockNotDue();
+  error CoveredVault__NoFeesToClaim();
 
   /* ========== Constructor ========== */
 
@@ -308,8 +309,10 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   function claimFees(address _to) external onlyRole(DEFAULT_ADMIN_ROLE) {
     uint256 _accumulatedFees = accumulatedFees;
-    accumulatedFees = 0;
 
+    if (_accumulatedFees == 0) revert CoveredVault__NoFeesToClaim();
+
+    accumulatedFees = 0;
     IERC20(asset()).safeTransfer(_to, _accumulatedFees);
   }
 
