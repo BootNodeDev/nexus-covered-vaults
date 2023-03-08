@@ -10,6 +10,7 @@ import { ICover, BuyCoverParams, PoolAllocationRequest, CoverData, Product } fro
 import { IPool } from "./interfaces/IPool.sol";
 import { ICoverNFT } from "./interfaces/ICoverNFT.sol";
 import { IYieldTokenIncidents } from "./interfaces/IYTI.sol";
+import { console } from "hardhat/console.sol";
 
 /**
  * @title CoverManager

@@ -15,7 +15,7 @@ contract CoverMock {
 
   uint256 public constant PREMIUM_DENOMINATOR = 1e4;
   uint256 public premium = 100; // 1%
-  uint256 public coverId = 1;
+  uint256 public coverId = 0;
 
   Product[] internal _products;
   mapping(uint => CoverData) private _coverData;
@@ -30,6 +30,14 @@ contract CoverMock {
     coverNFT = ICoverNFT(_coverNFT);
   }
 
+  function coverData(uint256 _coverId) external view returns (CoverData memory) {
+    return _coverData[_coverId];
+  }
+
+  function products(uint256 _id) external view returns (Product memory) {
+    return _products[_id];
+  }
+
   function setPremium(uint256 _premium) public {
     if (_premium > PREMIUM_DENOMINATOR) revert CoverMock_PremiumTooHigh();
     premium = _premium;
@@ -40,11 +48,7 @@ contract CoverMock {
       ProductParam calldata param = productParams[i];
       Product calldata product = param.product;
 
-      // New product has id == uint256.max
-      if (param.productId == type(uint256).max) {
-        _products.push(product);
-        continue;
-      }
+      _products.push(product);
     }
   }
 

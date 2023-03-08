@@ -3,6 +3,7 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { deployCoverManager } from "./utils/fixtures";
 import { setNextBlockBaseFeePerGas } from "@nomicfoundation/hardhat-network-helpers";
+import { parseEther } from "ethers/lib/utils";
 
 const poolAlloc = {
   poolId: 0,
@@ -22,6 +23,24 @@ const buyCoverParams = {
   commissionRatio: 0,
   commissionDestination: ethers.constants.AddressZero,
   ipfsData: "",
+};
+
+const product = {
+  productType: 1,
+  yieldTokenAddress: ethers.constants.AddressZero,
+  coverAssets: 0,
+  initialPriceRatio: 4,
+  capacityReductionRatio: 1,
+  isDeprecated: false,
+  useFixedPrice: true,
+};
+
+const productParam = {
+  productName: "test",
+  productId: buyCoverParams.productId,
+  ipfsMetadata: buyCoverParams.ipfsData,
+  product,
+  allowedPools: [],
 };
 
 describe("CoverManager", function () {
@@ -159,56 +178,69 @@ describe("CoverManager", function () {
   });
 
   describe.only("redeemCover", function () {
-    xit("Should revert if caller is not allowed", async () => {
-      const { coverManager, coverNFT } = await loadFixture(deployCoverManager);
+    it("Should revert if caller is not allowed", async () => {
+      const { coverManager, cover, underlyingAsset } = await loadFixture(deployCoverManager);
       const [user1, , , , kycUser] = await ethers.getSigners();
 
-      await expect(coverManager.connect(user1).redeemCover(1)).to.be.revertedWithCustomError(
-        coverManager,
-        "CoverManager_NotAllowed",
-      );
+      await expect(
+        coverManager.connect(user1).redeemCover(1, 1, 0, 100, user1.address, []),
+      ).to.be.revertedWithCustomError(coverManager, "CoverManager_NotAllowed");
 
-      await coverNFT.connect(kycUser).mint(user1.address, 1);
       await coverManager.connect(kycUser).addToAllowList(user1.address);
-      await expect(coverManager.connect(user1).redeemCover(1)).to.not.be.reverted;
+
+      const products = [
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
+      ];
+
+      await cover.setProducts(products);
+      await coverManager
+        .connect(user1)
+        .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc], {
+          value: buyCoverParams.amount,
+        });
+
+      await underlyingAsset.mint(user1.address, parseEther("100"));
+      await underlyingAsset.approve(coverManager.address, parseEther("100"));
+      await expect(coverManager.connect(user1).redeemCover(1, 1, 0, 100, user1.address, [])).to.not.be.reverted;
     });
 
-    xit("Should revert if caller is not the owner of coverNFT", async () => {
-      const { coverManager, coverNFT } = await loadFixture(deployCoverManager);
+    it("Should revert if caller is not the owner of coverNFT", async () => {
+      const { coverManager, cover, underlyingAsset } = await loadFixture(deployCoverManager);
       const [user1, user2, , , kycUser] = await ethers.getSigners();
 
-      await coverNFT.connect(kycUser).mint(user1.address, 1);
-      await coverNFT.connect(kycUser).mint(user2.address, 2);
       await coverManager.connect(kycUser).addToAllowList(user1.address);
-      await expect(coverManager.connect(user1).redeemCover(2)).to.be.revertedWithCustomError(
-        coverManager,
-        "CoverManager_NotCoverNFTOwner",
-      );
+      await coverManager.connect(kycUser).addToAllowList(user2.address);
 
-      await expect(coverManager.connect(user1).redeemCover(1)).to.not.be.reverted;
-    });
+      const products = [
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
+      ];
 
-    xit("Should call YTI.redeemPayout()", async () => {
-      const { coverManager, coverNFT, _yieldTokenIncidents } = await loadFixture(deployCoverManager);
-      const [user1, , , , kycUser] = await ethers.getSigners();
+      await cover.setProducts(products);
 
-      await coverNFT.connect(kycUser).mint(user1.address, 1);
-      await coverManager.connect(kycUser).addToAllowList(user1.address);
+      // coverNFT 1
+      await coverManager
+        .connect(user1)
+        .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc], {
+          value: buyCoverParams.amount,
+        });
 
-      // ICover coverContract = ICover(getInternalContractAddress(ID.CO));
-      // CoverData memory coverData = coverContract.coverData(coverId);
-      // Product memory product = coverContract.products(coverData.productId);
+      // coverNFT 2
+      await coverManager
+        .connect(user2)
+        .buyCover({ ...buyCoverParams, owner: user2.address, paymentAsset: 0 }, [poolAlloc], {
+          value: buyCoverParams.amount,
+        });
 
-      // SafeERC20.safeTransferFrom(
-      //   IERC20(product.yieldTokenAddress),
-      //   msg.sender,
-      //   address(this),
-      //   depeggedTokens
-      // );
+      await underlyingAsset.mint(user1.address, parseEther("100"));
+      await underlyingAsset.approve(coverManager.address, parseEther("100"));
 
-      //     return (payoutAmount, coverData.coverAsset);
+      await expect(
+        coverManager.connect(user1).redeemCover(1, 2, 0, 100, user1.address, []),
+      ).to.be.revertedWithCustomError(coverManager, "CoverManager_NotCoverNFTOwner");
 
-      await expect(coverManager.connect(user1).redeemCover(1)).to.have;
+      await expect(coverManager.connect(user1).redeemCover(1, 1, 0, 100, user1.address, [])).to.not.be.reverted;
     });
   });
 });
