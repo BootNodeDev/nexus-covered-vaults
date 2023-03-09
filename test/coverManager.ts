@@ -120,13 +120,17 @@ describe("CoverManager", function () {
         .connect(kycUser)
         .depositOnBehalf(underlyingAsset.address, buyCoverParams.amount, user1.address);
 
-      await expect(coverManager.connect(user1).buyCover({ ...buyCoverParams, paymentAsset: 1 }, [poolAlloc])).to.not.be
-        .reverted;
+      await expect(
+        coverManager.connect(user1).buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 1 }, [poolAlloc]),
+      ).to.not.be.reverted;
 
       await coverManager.connect(kycUser).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
-      await coverManager.connect(user1).buyCover({ ...buyCoverParams, paymentAsset: 0 }, [poolAlloc]);
-      await expect(coverManager.connect(user1).buyCover({ ...buyCoverParams, paymentAsset: 0 }, [poolAlloc])).to.not.be
-        .reverted;
+      await coverManager
+        .connect(user1)
+        .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc]);
+      await expect(
+        coverManager.connect(user1).buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc]),
+      ).to.not.be.reverted;
     });
 
     xit("Should return to sender amount not spent in ETH", async () => {
@@ -138,10 +142,13 @@ describe("CoverManager", function () {
       const balanceBefore = await user1.getBalance();
 
       await setNextBlockBaseFeePerGas(0);
-      await coverManager.connect(user1).buyCover({ ...buyCoverParams, paymentAsset: 0 }, [poolAlloc], {
-        value: buyCoverParams.amount.mul(2),
-        gasPrice: 0,
-      });
+      await coverManager.connect(kycUser).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
+
+      await coverManager
+        .connect(user1)
+        .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc], {
+          gasPrice: 0,
+        });
 
       const balanceAfter = await user1.getBalance();
       const premium = await cover.premium();
@@ -162,10 +169,11 @@ describe("CoverManager", function () {
       const balanceBefore = await underlyingAsset.balanceOf(user1.address);
 
       await setNextBlockBaseFeePerGas(0);
-      await coverManager.connect(user1).buyCover({ ...buyCoverParams, paymentAsset: 1 }, [poolAlloc], {
-        value: 0,
-        gasPrice: 0,
-      });
+      await coverManager
+        .connect(user1)
+        .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 1 }, [poolAlloc], {
+          gasPrice: 0,
+        });
 
       const balanceAfter = await underlyingAsset.balanceOf(user1.address);
 
@@ -177,7 +185,7 @@ describe("CoverManager", function () {
     });
   });
 
-  describe.only("redeemCover", function () {
+  describe("redeemCover", function () {
     it("Should revert if caller is not allowed", async () => {
       const { coverManager, cover, underlyingAsset } = await loadFixture(deployCoverManager);
       const [user1, , , , kycUser] = await ethers.getSigners();
@@ -194,11 +202,10 @@ describe("CoverManager", function () {
       ];
 
       await cover.setProducts(products);
+      await coverManager.connect(kycUser).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
       await coverManager
         .connect(user1)
-        .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc], {
-          value: buyCoverParams.amount,
-        });
+        .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc]);
 
       await underlyingAsset.mint(user1.address, parseEther("100"));
       await underlyingAsset.approve(coverManager.address, parseEther("100"));
@@ -220,18 +227,16 @@ describe("CoverManager", function () {
       await cover.setProducts(products);
 
       // coverNFT 1
+      await coverManager.connect(kycUser).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
       await coverManager
         .connect(user1)
-        .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc], {
-          value: buyCoverParams.amount,
-        });
+        .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc]);
 
       // coverNFT 2
+      await coverManager.connect(kycUser).depositETHOnBehalf(user2.address, { value: buyCoverParams.amount });
       await coverManager
         .connect(user2)
-        .buyCover({ ...buyCoverParams, owner: user2.address, paymentAsset: 0 }, [poolAlloc], {
-          value: buyCoverParams.amount,
-        });
+        .buyCover({ ...buyCoverParams, owner: user2.address, paymentAsset: 0 }, [poolAlloc]);
 
       await underlyingAsset.mint(user1.address, parseEther("100"));
       await underlyingAsset.approve(coverManager.address, parseEther("100"));
@@ -242,5 +247,14 @@ describe("CoverManager", function () {
 
       await expect(coverManager.connect(user1).redeemCover(1, 1, 0, 100, user1.address, [])).to.not.be.reverted;
     });
+
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    xit("Should transfer depeggedTokens to coverManager", async () => {});
+
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    xit("Should revert if user balance < depeggedTokens", async () => {});
+
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    xit("Should return payoutAmount and asset", async () => {});
   });
 });
