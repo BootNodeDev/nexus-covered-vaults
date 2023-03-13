@@ -42,27 +42,17 @@ abstract contract BaseERC4626 is ERC4626, ERC20Permit {
 
   /** @dev See {IERC4626-totalAssets}. */
   function totalAssets() public view override returns (uint256) {
-    return _totalAssets(false);
+    return _totalAssets(false, true);
   }
 
   /** @dev See {IERC4626-convertToShares}. */
   function convertToShares(uint256 assets) public view override returns (uint256 shares) {
-    return _convertToShares(assets, Math.Rounding.Down, false);
+    return _convertToShares(assets, Math.Rounding.Down, false, false);
   }
 
   /** @dev See {IERC4626-convertToAssets}. */
   function convertToAssets(uint256 shares) public view override returns (uint256 assets) {
-    return _convertToAssets(shares, Math.Rounding.Down, false);
-  }
-
-  /** @dev See {IERC4626-previewWithdraw}. */
-  function previewWithdraw(uint256 assets) public view override returns (uint256) {
-    return _convertToShares(assets, Math.Rounding.Up, true);
-  }
-
-  /** @dev See {IERC4626-previewRedeem}. */
-  function previewRedeem(uint256 shares) public view override returns (uint256) {
-    return _convertToAssets(shares, Math.Rounding.Down, true);
+    return _convertToAssets(shares, Math.Rounding.Down, false, false);
   }
 
   /** @dev See {IERC4626-maxDeposit}. */
@@ -112,9 +102,10 @@ abstract contract BaseERC4626 is ERC4626, ERC20Permit {
   function _convertToShares(
     uint256 assets,
     Math.Rounding rounding,
-    bool preview
+    bool preview,
+    bool accountForFees
   ) internal view returns (uint256 shares) {
-    return _convertToShares(assets, rounding, _totalAssets(preview));
+    return _convertToShares(assets, rounding, _totalAssets(preview, accountForFees));
   }
 
   /**
@@ -138,14 +129,15 @@ abstract contract BaseERC4626 is ERC4626, ERC20Permit {
   function _convertToAssets(
     uint256 shares,
     Math.Rounding rounding,
-    bool preview
+    bool preview,
+    bool accountForFees
   ) internal view returns (uint256 assets) {
-    return _convertToAssets(shares, rounding, _totalAssets(preview));
+    return _convertToAssets(shares, rounding, _totalAssets(preview, accountForFees));
   }
 
   /** @dev See {IERC4626-maxDeposit}. */
   function _maxDeposit(address) internal view virtual returns (uint256, uint256);
 
   /** @dev See {IERC4626-totalAssets}. */
-  function _totalAssets(bool preview) internal view virtual returns (uint256);
+  function _totalAssets(bool _preview, bool accountForFees) internal view virtual returns (uint256);
 }
