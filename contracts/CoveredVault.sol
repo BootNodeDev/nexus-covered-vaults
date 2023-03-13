@@ -9,6 +9,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { ERC4626 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { AccessManager } from "./vault/AccessManager.sol";
+import { FeeManager } from "./vault/FeeManager.sol";
 import { SafeERC4626 } from "./vault/SafeERC4626.sol";
 
 /**
@@ -16,33 +17,13 @@ import { SafeERC4626 } from "./vault/SafeERC4626.sol";
  * @dev An ERC-4626 vault that invest the assets in an underlying ERC-4626 vault. Invested funds are protected by
  * purchasing coverage on Nexus Mutual.
  */
-contract CoveredVault is SafeERC4626, AccessManager {
+contract CoveredVault is SafeERC4626, AccessManager, FeeManager {
   using SafeERC20 for IERC20;
-
-  struct ProposedDepositFee {
-    uint256 deadline;
-    uint256 newFee;
-  }
 
   /**
    * @dev Role for botOperator
    */
   bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
-
-  /**
-   *  @dev Timelock for depositFee application
-   */
-  uint256 public constant FEE_TIME_LOCK = 2 weeks;
-
-  /**
-   * @dev fee denominator 100% with two decimals
-   */
-  uint256 public constant FEE_DENOMINATOR = 1e4;
-
-  /**
-   * @dev Period over which management fee are calculated
-   */
-  uint256 public constant FEE_MANAGER_PERIOD = 365 days;
 
   /**
    * @dev CoverId assigned on buyCover
@@ -81,44 +62,6 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   uint256 public underlyingVaultShares;
 
-  /**
-   * @dev Amount of accumulated fees in asset for the admin to claim
-   */
-  uint256 public accumulatedAssetFees;
-
-  /**
-   * @dev Amount of accumulated fees in underlying vault shares for the admin to claim
-   */
-  uint256 public accumulatedUVSharesFees;
-
-  /**
-   * @dev Percentage charged to users on deposit on 1e4 units.
-   * Helps to avoid short term deposits.
-   * After construction is updated with `setDepositFee` and have effect after `applyDepositFee` is called with timelock due.
-   */
-  uint256 public depositFee;
-
-  /**
-   * @dev Annually percentage fee charged on invested assets.
-   * After construction is updated with `setDepositFee` and have effect after `applyDepositFee` is called with timelock due.
-   */
-  uint256 public managementFee;
-
-  /**
-   * @dev Tracks the last timestamp until management fees were accrued
-   */
-  uint256 public lastManagementFeesUpdate;
-
-  /**
-   * @dev New proposed deposit fee
-   */
-  ProposedDepositFee public proposedDepositFee;
-
-  /**
-   * @dev New proposed management fee
-   */
-  ProposedDepositFee public proposedManagementFee;
-
   /* ========== Events ========== */
 
   /**
@@ -136,37 +79,8 @@ contract CoveredVault is SafeERC4626, AccessManager {
    */
   event MaxAssetsLimitUpdated(uint256 newLimit);
 
-  /**
-   * @dev Emitted when the deposit fee changes effectively
-   */
-  event DepositFeeUpdated(uint256 newFee);
-
-  /**
-   * @dev Emitted when the deposit fee is set to be changed
-   */
-  event NewDepositFeeProposed(uint256 newFee);
-
-  /**
-   * @dev Emitted when the management fee changes effectively
-   */
-  event ManagementFeeUpdated(uint256 newFee);
-
-  /**
-   * @dev Emitted when the management fee is set to be changed
-   */
-  event NewManagementFeeProposed(uint256 newFee);
-
-  /**
-   * @dev Emitted when the assets are accounted as fee for the manager
-   */
-  event FeeAccrued(address asset, uint256 amount);
-
   /* ========== Custom Errors ========== */
 
-  error CoveredVault__FeeOutOfBound();
-  error CoveredVault__FeeProposalNotFound();
-  error CoveredVault__FeeTimeLockNotDue();
-  error CoveredVault__NoFeesToClaim();
   error CoveredVault__WithdrawMoreThanMax();
 
   /* ========== Constructor ========== */
@@ -193,16 +107,15 @@ contract CoveredVault is SafeERC4626, AccessManager {
     ICoverManager _coverManager,
     uint256 _depositFee,
     uint256 _managementFee
-  ) SafeERC4626(IERC20(_underlyingVault.asset()), _name, _symbol) AccessManager(_admin) {
+  )
+    SafeERC4626(IERC20(_underlyingVault.asset()), _name, _symbol)
+    AccessManager(_admin)
+    FeeManager(_depositFee, _managementFee)
+  {
     underlyingVault = _underlyingVault;
     maxAssetsLimit = _maxAssetsLimit;
     productId = _productId;
     coverManager = _coverManager;
-    depositFee = _depositFee;
-    managementFee = _managementFee;
-
-    emit DepositFeeUpdated(_depositFee);
-    emit ManagementFeeUpdated(_managementFee);
   }
 
   /* ========== User methods ========== */
@@ -345,7 +258,7 @@ contract CoveredVault is SafeERC4626, AccessManager {
     lastManagementFeesUpdate = block.timestamp;
 
     if (fee > 0) {
-      _accrueManagementFees(fee);
+      _accrueManagementFees(address(underlyingVault), fee);
     }
 
     emit Invested(_amount, shares, msg.sender);
@@ -374,7 +287,7 @@ contract CoveredVault is SafeERC4626, AccessManager {
     lastManagementFeesUpdate = block.timestamp;
 
     if (fee > 0) {
-      _accrueManagementFees(fee);
+      _accrueManagementFees(address(underlyingVault), fee);
     }
 
     emit UnInvested(assets, redeemedShares, msg.sender);
@@ -396,12 +309,7 @@ contract CoveredVault is SafeERC4626, AccessManager {
    * @param _depositFee New fee percentage to charge users on deposit
    */
   function setDepositFee(uint256 _depositFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (_depositFee > FEE_DENOMINATOR) revert CoveredVault__FeeOutOfBound();
-
-    proposedDepositFee.newFee = _depositFee;
-    proposedDepositFee.deadline = block.timestamp + FEE_TIME_LOCK;
-
-    emit NewDepositFeeProposed(_depositFee);
+    _setDepositFee(_depositFee);
   }
 
   /**
@@ -409,49 +317,21 @@ contract CoveredVault is SafeERC4626, AccessManager {
    * @param _managementFee New fee percentage to charge users on invested assets
    */
   function setManagementFee(uint256 _managementFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (_managementFee > FEE_DENOMINATOR) revert CoveredVault__FeeOutOfBound();
-
-    proposedManagementFee.newFee = _managementFee;
-    proposedManagementFee.deadline = block.timestamp + FEE_TIME_LOCK;
-
-    emit NewManagementFeeProposed(_managementFee);
+    _setManagementFee(_managementFee);
   }
 
   /**
    * @dev Sets the depositFee to its pending value if FEE_TIME_LOCK has passed.
    */
   function applyDepositFee() external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (proposedDepositFee.deadline == 0) revert CoveredVault__FeeProposalNotFound();
-    if (block.timestamp < proposedDepositFee.deadline) revert CoveredVault__FeeTimeLockNotDue();
-
-    depositFee = proposedDepositFee.newFee;
-    delete proposedDepositFee;
-
-    emit DepositFeeUpdated(depositFee);
+    _applyDepositFee();
   }
 
   /**
    * @dev Sets the managementFee to its pending value if FEE_TIME_LOCK has passed.
    */
   function applyManagementFee() external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (proposedManagementFee.deadline == 0) revert CoveredVault__FeeProposalNotFound();
-    if (block.timestamp < proposedManagementFee.deadline) revert CoveredVault__FeeTimeLockNotDue();
-
-    // calculate management fees
-    uint256 fee = _calculateManagementFee(underlyingVaultShares);
-    underlyingVaultShares = underlyingVaultShares - fee;
-
-    // update accumulated fees
-    lastManagementFeesUpdate = block.timestamp;
-
-    if (fee > 0) {
-      _accrueManagementFees(fee);
-    }
-
-    managementFee = proposedManagementFee.newFee;
-    delete proposedManagementFee;
-
-    emit ManagementFeeUpdated(managementFee);
+    _applyManagementFee();
   }
 
   /**
@@ -459,21 +339,7 @@ contract CoveredVault is SafeERC4626, AccessManager {
    * @param _to receiver of the claimed fees
    */
   function claimFees(address _to) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    uint256 _accumulatedAssetFees = accumulatedAssetFees;
-    uint256 _accumulatedUVSharesFees = accumulatedUVSharesFees;
-
-    if (_accumulatedAssetFees == 0 && _accumulatedUVSharesFees == 0) revert CoveredVault__NoFeesToClaim();
-
-    accumulatedAssetFees = 0;
-    accumulatedUVSharesFees = 0;
-
-    if (_accumulatedAssetFees > 0) {
-      IERC20(asset()).safeTransfer(_to, _accumulatedAssetFees);
-    }
-
-    if (_accumulatedUVSharesFees > 0) {
-      IERC20(underlyingVault).safeTransfer(_to, _accumulatedUVSharesFees);
-    }
+    _claimFees(asset(), address(underlyingVault), _to);
   }
 
   /* ========== Internal methods ========== */
@@ -540,57 +406,15 @@ contract CoveredVault is SafeERC4626, AccessManager {
   }
 
   /**
-   * @dev Calculates the fee to be subtracted from an amount
-   * feeAmount = _amount * FeeN / FeeD
-   * @param _amount total amount
-   * @param _fee fee numerator to be applied
-   * @return the quantity of _amount to be considered as a fee
+   * @dev Update the assets composition based on the accumulated manager fees
    */
-  function _calculateDepositFee(uint256 _amount, uint256 _fee) internal pure returns (uint256) {
-    return (_amount * _fee) / FEE_DENOMINATOR;
-  }
-
-  /**
-   * @dev Calculates the total amount from an amount that already got fees subtracted
-   * totalAmount = _amount + feeAmount
-   * totalAmount = _amount + totalAmount * FeeN/ FeeD
-   * totalAmount - totalAmount * FeeN/ FeeD = _amount
-   * totalAmount * (1 - FeeN/ FeeD) = _amount
-   * totalAmount = _amount / (1 - FeeN/ FeeD)
-   * totalAmount = (_amount / (1 - FeeN/ FeeD)) * (FeeD / FeeD)
-   * totalAmount = _amount * FeeD / (FeeD * (1 - FeeN/ FeeD))
-   * totalAmount = _amount * FeeD / (FeeD - FeeN)
-   * @param _amount amount
-   * @param _fee fee numerator to be applied
-   * @return the amount from which after subtracting the fee would result in _amount
-   */
-  function _calculateAmountIncludingDepositFee(uint256 _amount, uint256 _fee) internal pure returns (uint256) {
-    return (_amount * FEE_DENOMINATOR) / (FEE_DENOMINATOR - _fee);
-  }
-
-  /**
-   * @dev Calculates the fee to be subtracted from an amount
-   * feeAmount = _amount * secondsSinceLastUpdate * FeeN / FeeD / feePeriod
-   * @param _amount total amount
-   * @return the quantity of _amount to be considered as a fee
-   */
-  function _calculateManagementFee(uint256 _amount) internal view returns (uint256) {
-    uint256 secondsSinceLastUpdate = block.timestamp - lastManagementFeesUpdate;
-    return (_amount * secondsSinceLastUpdate * managementFee) / FEE_DENOMINATOR / FEE_MANAGER_PERIOD;
-  }
-
-  function _accrueManagementFees(uint256 _amount) internal {
-    accumulatedUVSharesFees += _amount;
-
-    emit FeeAccrued(address(underlyingVault), _amount);
-  }
-
-  function _updateAssets() internal {
+  function _updateAssets() internal override {
     uint256 fee = _calculateManagementFee(underlyingVaultShares);
+    underlyingVaultShares -= fee;
     lastManagementFeesUpdate = block.timestamp;
 
     if (fee > 0) {
-      _accrueManagementFees(fee);
+      _accrueManagementFees(address(underlyingVault), fee);
     }
   }
 }
