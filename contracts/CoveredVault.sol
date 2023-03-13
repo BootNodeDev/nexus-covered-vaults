@@ -147,6 +147,16 @@ contract CoveredVault is SafeERC4626, AccessManager {
   event NewDepositFeeProposed(uint256 newFee);
 
   /**
+   * @dev Emitted when the management fee changes effectively
+   */
+  event ManagementFeeUpdated(uint256 newFee);
+
+  /**
+   * @dev Emitted when the management fee is set to be changed
+   */
+  event NewManagementFeeProposed(uint256 newFee);
+
+  /**
    * @dev Emitted when the assets are accounted as fee for the manager
    */
   event FeeAccrued(address asset, uint256 amount);
@@ -190,6 +200,9 @@ contract CoveredVault is SafeERC4626, AccessManager {
     coverManager = _coverManager;
     depositFee = _depositFee;
     managementFee = _managementFee;
+
+    emit DepositFeeUpdated(_depositFee);
+    emit ManagementFeeUpdated(_managementFee);
   }
 
   /* ========== User methods ========== */
@@ -387,6 +400,8 @@ contract CoveredVault is SafeERC4626, AccessManager {
 
     proposedDepositFee.newFee = _depositFee;
     proposedDepositFee.deadline = block.timestamp + FEE_TIME_LOCK;
+
+    emit NewDepositFeeProposed(_depositFee);
   }
 
   /**
@@ -398,6 +413,8 @@ contract CoveredVault is SafeERC4626, AccessManager {
 
     proposedManagementFee.newFee = _managementFee;
     proposedManagementFee.deadline = block.timestamp + FEE_TIME_LOCK;
+
+    emit NewManagementFeeProposed(_managementFee);
   }
 
   /**
@@ -409,6 +426,8 @@ contract CoveredVault is SafeERC4626, AccessManager {
 
     depositFee = proposedDepositFee.newFee;
     delete proposedDepositFee;
+
+    emit DepositFeeUpdated(depositFee);
   }
 
   /**
@@ -431,6 +450,8 @@ contract CoveredVault is SafeERC4626, AccessManager {
 
     managementFee = proposedManagementFee.newFee;
     delete proposedManagementFee;
+
+    emit ManagementFeeUpdated(managementFee);
   }
 
   /**
