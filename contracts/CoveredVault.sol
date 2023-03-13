@@ -82,6 +82,7 @@ contract CoveredVault is SafeERC4626, AccessManager, FeeManager {
   /* ========== Custom Errors ========== */
 
   error CoveredVault__WithdrawMoreThanMax();
+  error CoveredVault__RedeemMoreThanMax();
 
   /* ========== Constructor ========== */
 
@@ -170,11 +171,14 @@ contract CoveredVault is SafeERC4626, AccessManager, FeeManager {
     address _receiver,
     address _owner
   ) public override whenNotPaused returns (uint256) {
-    if (_assets > maxWithdraw(_owner)) revert CoveredVault__WithdrawMoreThanMax();
-
     _updateAssets();
 
-    uint256 shares = _convertToShares(_assets, Math.Rounding.Up, true, false);
+    uint256 vaultTotalAssets = _totalAssets(true, false);
+    uint256 userMaxWithdraw = _convertToAssets(balanceOf(_owner), Math.Rounding.Down, vaultTotalAssets);
+
+    if (_assets > userMaxWithdraw) revert CoveredVault__WithdrawMoreThanMax();
+
+    uint256 shares = _convertToShares(_assets, Math.Rounding.Up, vaultTotalAssets);
     _withdraw(_msgSender(), _receiver, _owner, _assets, shares);
 
     return shares;
@@ -182,7 +186,7 @@ contract CoveredVault is SafeERC4626, AccessManager, FeeManager {
 
   /** @dev See {IERC4626-redeem}. */
   function redeem(uint256 _shares, address _receiver, address _owner) public override whenNotPaused returns (uint256) {
-    require(_shares <= maxRedeem(_owner), "ERC4626: redeem more than max");
+    if (_shares > maxRedeem(_owner)) revert CoveredVault__RedeemMoreThanMax();
 
     _updateAssets();
 

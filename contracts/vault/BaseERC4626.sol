@@ -42,7 +42,7 @@ abstract contract BaseERC4626 is ERC4626, ERC20Permit {
 
   /** @dev See {IERC4626-totalAssets}. */
   function totalAssets() public view override returns (uint256) {
-    return _totalAssets(false, true);
+    return _totalAssets(true, true);
   }
 
   /** @dev See {IERC4626-convertToShares}. */
