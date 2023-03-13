@@ -434,7 +434,7 @@ describe("CoveredVault", function () {
     });
   });
 
-  describe("applyFee", function () {
+  describe("applyDepositFee", function () {
     it("Should revert if not admin", async function () {
       const { vault } = await loadFixture(deployVaultFixture);
       const [user1, , , admin] = await ethers.getSigners();
@@ -446,18 +446,18 @@ describe("CoveredVault", function () {
       await vault.connect(admin).setDepositFee(fee);
 
       await increase(timeLock);
-      await expect(vault.connect(user1).applyFee()).to.be.revertedWith(
+      await expect(vault.connect(user1).applyDepositFee()).to.be.revertedWith(
         `AccessControl: account ${user1.address.toLowerCase()} is missing role ${adminRole}`,
       );
 
-      await vault.connect(admin).applyFee();
+      await vault.connect(admin).applyDepositFee();
     });
 
     it("Should revert if no proposed fee is found", async function () {
       const { vault } = await loadFixture(deployVaultFixture);
       const [, , , admin] = await ethers.getSigners();
 
-      await expect(vault.connect(admin).applyFee()).to.revertedWithCustomError(
+      await expect(vault.connect(admin).applyDepositFee()).to.revertedWithCustomError(
         vault,
         "CoveredVault__FeeProposalNotFound",
       );
@@ -473,8 +473,8 @@ describe("CoveredVault", function () {
       await vault.connect(admin).setDepositFee(fee);
 
       await increase(timeLock);
-      await vault.connect(admin).applyFee();
-      await expect(vault.connect(admin).applyFee()).to.revertedWithCustomError(
+      await vault.connect(admin).applyDepositFee();
+      await expect(vault.connect(admin).applyDepositFee()).to.revertedWithCustomError(
         vault,
         "CoveredVault__FeeProposalNotFound",
       );
@@ -490,13 +490,13 @@ describe("CoveredVault", function () {
       await vault.connect(admin).setDepositFee(fee);
 
       await increase(timeLock.sub("60"));
-      await expect(vault.connect(admin).applyFee()).to.revertedWithCustomError(
+      await expect(vault.connect(admin).applyDepositFee()).to.revertedWithCustomError(
         vault,
         "CoveredVault__FeeTimeLockNotDue",
       );
 
       await increase(BigNumber.from("60"));
-      await vault.connect(admin).applyFee();
+      await vault.connect(admin).applyDepositFee();
     });
 
     it("Should change fee and reset proposed fee", async function () {
@@ -519,7 +519,7 @@ describe("CoveredVault", function () {
       expect(depositFeeAfterSet).to.be.equal("0");
 
       await increase(timeLock);
-      await vault.connect(admin).applyFee();
+      await vault.connect(admin).applyDepositFee();
 
       const depositFeeAfterApply = await vault.depositFee();
       expect(depositFeeAfterApply).to.be.equal(fee);
@@ -545,7 +545,7 @@ describe("CoveredVault", function () {
 
       await vault.connect(admin).setDepositFee(fee);
       await increase(timeLock);
-      await vault.connect(admin).applyFee();
+      await vault.connect(admin).applyDepositFee();
 
       await underlyingAsset.connect(user1).approve(vault.address, depositAmount);
       await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
@@ -578,7 +578,7 @@ describe("CoveredVault", function () {
       await vault.connect(admin).setDepositFee(BigNumber.from(0.05 * 1e4));
       const timeLock = await vault.FEE_TIME_LOCK();
       await increase(timeLock);
-      await vault.connect(admin).applyFee();
+      await vault.connect(admin).applyDepositFee();
 
       const depositFee = await vault.depositFee();
       const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
@@ -588,27 +588,27 @@ describe("CoveredVault", function () {
       await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
 
       {
-        const accumulatedFees = await vault.accumulatedFees();
-        expect(accumulatedFees).to.equal(fee);
+        const accumulatedAssetFees = await vault.accumulatedAssetFees();
+        expect(accumulatedAssetFees).to.equal(fee);
       }
 
       await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
 
       {
-        const accumulatedFees = await vault.accumulatedFees();
-        expect(accumulatedFees).to.equal(fee.mul(2));
+        const accumulatedAssetFees = await vault.accumulatedAssetFees();
+        expect(accumulatedAssetFees).to.equal(fee.mul(2));
       }
 
       const initialBalance = await underlyingAsset.balanceOf(destination.address);
-      const accumulatedFeesBefore = await vault.accumulatedFees();
+      const accumulatedAssetFeesBefore = await vault.accumulatedAssetFees();
 
       await vault.connect(admin).claimFees(destination.address);
 
       const balanceAfter = await underlyingAsset.balanceOf(destination.address);
-      const accumulatedFeesAfter = await vault.accumulatedFees();
+      const accumulatedAssetFeesAfter = await vault.accumulatedAssetFees();
 
-      expect(balanceAfter).to.equal(initialBalance.add(accumulatedFeesBefore));
-      expect(accumulatedFeesAfter).to.equal(0);
+      expect(balanceAfter).to.equal(initialBalance.add(accumulatedAssetFeesBefore));
+      expect(accumulatedAssetFeesAfter).to.equal(0);
     });
   });
 });
