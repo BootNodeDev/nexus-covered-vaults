@@ -3,12 +3,13 @@ pragma solidity 0.8.17;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { AccessManager } from "./AccessManager.sol";
 
 /**
  * @title FeeManager
  * @dev Implements logic related to the vault fees
  */
-abstract contract FeeManager {
+abstract contract FeeManager is AccessManager {
   using SafeERC20 for IERC20;
 
   struct ProposedDepositFee {
@@ -105,10 +106,11 @@ abstract contract FeeManager {
 
   /**
    * @dev Set fees initial parameters
+   * @param _admin address of admin operator
    * @param _depositFee Fee for new deposits
    * @param _managementFee Fee for managed assets
    */
-  constructor(uint256 _depositFee, uint256 _managementFee) {
+  constructor(address _admin, uint256 _depositFee, uint256 _managementFee) AccessManager(_admin) {
     depositFee = _depositFee;
     managementFee = _managementFee;
 
@@ -120,7 +122,7 @@ abstract contract FeeManager {
    * @dev Sets the depositFee to be applied after FEE_TIME_LOCK has passed.
    * @param _depositFee New fee percentage to charge users on deposit
    */
-  function _setDepositFee(uint256 _depositFee) internal {
+  function setDepositFee(uint256 _depositFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
     if (_depositFee > FEE_DENOMINATOR) revert CoveredVault__FeeOutOfBound();
 
     proposedDepositFee.newFee = _depositFee;
@@ -133,7 +135,7 @@ abstract contract FeeManager {
    * @dev Sets the managementFee to be applied after FEE_TIME_LOCK has passed.
    * @param _managementFee New fee percentage to charge users on invested assets
    */
-  function _setManagementFee(uint256 _managementFee) internal {
+  function setManagementFee(uint256 _managementFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
     if (_managementFee > FEE_DENOMINATOR) revert CoveredVault__FeeOutOfBound();
 
     proposedManagementFee.newFee = _managementFee;
@@ -145,7 +147,7 @@ abstract contract FeeManager {
   /**
    * @dev Sets the depositFee to its pending value if FEE_TIME_LOCK has passed.
    */
-  function _applyDepositFee() internal {
+  function applyDepositFee() external onlyRole(DEFAULT_ADMIN_ROLE) {
     if (proposedDepositFee.deadline == 0) revert CoveredVault__FeeProposalNotFound();
     if (block.timestamp < proposedDepositFee.deadline) revert CoveredVault__FeeTimeLockNotDue();
 
@@ -158,7 +160,7 @@ abstract contract FeeManager {
   /**
    * @dev Sets the managementFee to its pending value if FEE_TIME_LOCK has passed.
    */
-  function _applyManagementFee() internal {
+  function applyManagementFee() external onlyRole(DEFAULT_ADMIN_ROLE) {
     if (proposedManagementFee.deadline == 0) revert CoveredVault__FeeProposalNotFound();
     if (block.timestamp < proposedManagementFee.deadline) revert CoveredVault__FeeTimeLockNotDue();
 

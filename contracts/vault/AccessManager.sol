@@ -10,6 +10,11 @@ import { Pausable } from "@openzeppelin/contracts/security/Pausable.sol";
  */
 contract AccessManager is AccessControlEnumerable, Pausable {
   /**
+   * @dev Role for botOperator
+   */
+  bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
+
+  /**
    * @dev Validates that the sender is the main admin of the contract or has the required role
    * @param role the role to validate
    */

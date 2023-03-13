@@ -6,9 +6,7 @@ import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { BuyCoverParams, PoolAllocationRequest } from "./interfaces/ICover.sol";
 import { ICoverManager } from "./interfaces/ICoverManager.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { ERC4626 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
-import { AccessManager } from "./vault/AccessManager.sol";
 import { FeeManager } from "./vault/FeeManager.sol";
 import { SafeERC4626 } from "./vault/SafeERC4626.sol";
 
@@ -17,13 +15,8 @@ import { SafeERC4626 } from "./vault/SafeERC4626.sol";
  * @dev An ERC-4626 vault that invest the assets in an underlying ERC-4626 vault. Invested funds are protected by
  * purchasing coverage on Nexus Mutual.
  */
-contract CoveredVault is SafeERC4626, AccessManager, FeeManager {
+contract CoveredVault is SafeERC4626, FeeManager {
   using SafeERC20 for IERC20;
-
-  /**
-   * @dev Role for botOperator
-   */
-  bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
 
   /**
    * @dev CoverId assigned on buyCover
@@ -108,11 +101,7 @@ contract CoveredVault is SafeERC4626, AccessManager, FeeManager {
     ICoverManager _coverManager,
     uint256 _depositFee,
     uint256 _managementFee
-  )
-    SafeERC4626(IERC20(_underlyingVault.asset()), _name, _symbol)
-    AccessManager(_admin)
-    FeeManager(_depositFee, _managementFee)
-  {
+  ) SafeERC4626(IERC20(_underlyingVault.asset()), _name, _symbol) FeeManager(_admin, _depositFee, _managementFee) {
     underlyingVault = _underlyingVault;
     maxAssetsLimit = _maxAssetsLimit;
     productId = _productId;
@@ -306,36 +295,6 @@ contract CoveredVault is SafeERC4626, AccessManager, FeeManager {
     maxAssetsLimit = _maxAssetsLimit;
 
     emit MaxAssetsLimitUpdated(_maxAssetsLimit);
-  }
-
-  /**
-   * @dev Sets the depositFee to be applied after FEE_TIME_LOCK has passed.
-   * @param _depositFee New fee percentage to charge users on deposit
-   */
-  function setDepositFee(uint256 _depositFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    _setDepositFee(_depositFee);
-  }
-
-  /**
-   * @dev Sets the managementFee to be applied after FEE_TIME_LOCK has passed.
-   * @param _managementFee New fee percentage to charge users on invested assets
-   */
-  function setManagementFee(uint256 _managementFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    _setManagementFee(_managementFee);
-  }
-
-  /**
-   * @dev Sets the depositFee to its pending value if FEE_TIME_LOCK has passed.
-   */
-  function applyDepositFee() external onlyRole(DEFAULT_ADMIN_ROLE) {
-    _applyDepositFee();
-  }
-
-  /**
-   * @dev Sets the managementFee to its pending value if FEE_TIME_LOCK has passed.
-   */
-  function applyManagementFee() external onlyRole(DEFAULT_ADMIN_ROLE) {
-    _applyManagementFee();
   }
 
   /**
