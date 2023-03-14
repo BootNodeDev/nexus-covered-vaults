@@ -18,6 +18,7 @@ contract CoverManager is Ownable, ReentrancyGuard {
   using SafeERC20 for IERC20;
 
   address public constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+  uint256 public constant NEXUS_ETH_ASSET_ID = 0;
 
   address public immutable cover;
   address public immutable yieldTokenIncident;
@@ -93,30 +94,57 @@ contract CoverManager is Ownable, ReentrancyGuard {
     BuyCoverParams calldata params,
     PoolAllocationRequest[] calldata coverChunkRequests
   ) external nonReentrant onlyAllowed returns (uint256 coverId) {
-    address asset = IPool(pool).getAsset(params.paymentAsset).assetAddress;
+    return
+      params.paymentAsset == NEXUS_ETH_ASSET_ID
+        ? _buyCoverETH(params, coverChunkRequests)
+        : _buyCover(params, coverChunkRequests);
+  }
 
-    bool isETH = params.paymentAsset == 0;
+  /**
+   * @dev Allows to call Cover.buyCover() using an ERC20 asset as payment asset
+   * @param params parameters to call buyCover
+   * @param coverChunkRequests pool allocations for buyCover
+   */
+  function _buyCover(
+    BuyCoverParams calldata params,
+    PoolAllocationRequest[] calldata coverChunkRequests
+  ) internal returns (uint256 coverId) {
+    address asset = IPool(pool).getAsset(params.paymentAsset).assetAddress;
 
     if (funds[asset][msg.sender] < params.maxPremiumInAsset) revert CoverManager_InsufficientFunds();
 
-    if (!isETH) {
-      IERC20(asset).safeApprove(cover, params.maxPremiumInAsset);
-    }
+    IERC20(asset).safeApprove(cover, params.maxPremiumInAsset);
 
-    uint256 initialBalance = isETH ? address(this).balance : IERC20(asset).balanceOf(address(this));
-    coverId = isETH
-      ? ICover(cover).buyCover{ value: params.amount }(params, coverChunkRequests)
-      : ICover(cover).buyCover(params, coverChunkRequests);
-    uint256 finalBalance = isETH ? address(this).balance : IERC20(asset).balanceOf(address(this));
+    uint256 initialBalance = IERC20(asset).balanceOf(address(this));
+    coverId = ICover(cover).buyCover(params, coverChunkRequests);
+    uint256 finalBalance = IERC20(asset).balanceOf(address(this));
 
-    if (!isETH) {
-      // reset allowance to 0 to comply with tokens that implement the anti frontrunning approval fix (ie. USDT)
-      IERC20(asset).safeApprove(cover, 0);
-    }
+    // reset allowance to 0 to comply with tokens that implement the anti frontrunning approval fix (ie. USDT)
+    IERC20(asset).safeApprove(cover, 0);
 
     uint256 spent = initialBalance - finalBalance;
-
     funds[asset][msg.sender] -= spent;
+
+    return coverId;
+  }
+
+  /**
+   * @dev Allows to call Cover.buyCover() using ETH as payment asset
+   * @param params parameters to call buyCover
+   * @param coverChunkRequests pool allocations for buyCover
+   */
+  function _buyCoverETH(
+    BuyCoverParams calldata params,
+    PoolAllocationRequest[] calldata coverChunkRequests
+  ) internal returns (uint256 coverId) {
+    if (funds[ETH_ADDRESS][msg.sender] < params.maxPremiumInAsset) revert CoverManager_InsufficientFunds();
+
+    uint256 initialBalance = address(this).balance;
+    coverId = ICover(cover).buyCover{ value: params.amount }(params, coverChunkRequests);
+    uint256 finalBalance = address(this).balance;
+
+    uint256 spent = initialBalance - finalBalance;
+    funds[ETH_ADDRESS][msg.sender] -= spent;
 
     return coverId;
   }
