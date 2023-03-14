@@ -153,9 +153,7 @@ contract CoverManager is Ownable, ReentrancyGuard {
     address payable payoutAddress,
     bytes calldata optionalParams
   ) external onlyAllowed returns (uint256 payoutAmount, address asset) {
-    if (ICover(cover).coverNFT().ownerOf(coverId) != msg.sender) {
-      revert CoverManager_NotCoverNFTOwner();
-    }
+    if (ICover(cover).coverNFT().ownerOf(coverId) != msg.sender) revert CoverManager_NotCoverNFTOwner();
 
     CoverData memory coverData = ICover(cover).coverData(coverId);
     Product memory product = ICover(cover).products(coverData.productId);
