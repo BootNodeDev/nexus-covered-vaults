@@ -144,7 +144,7 @@ contract CoverManager is Ownable {
   }
 
   /**
-   * @dev Allows to deposit ETH to keep track of it for each depositor
+   * @dev Allows to deposit ETH for paying the cover premiums
    * @param _to address allowed to use deposited ETH
    */
   function depositETHOnBehalf(address _to) external payable {
