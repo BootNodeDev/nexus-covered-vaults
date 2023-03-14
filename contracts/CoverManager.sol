@@ -128,7 +128,7 @@ contract CoverManager is Ownable {
   }
 
   /**
-   * @dev Allows to deposit assets to keep track of them for each depositor
+   * @dev Allows depositing assets for paying the cover premiums
    * @param _asset asset deposited
    * @param _amount amount of asset on behalf of _to
    * @param _to address allowed to use deposited assets
