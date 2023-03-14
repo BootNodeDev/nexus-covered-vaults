@@ -2,6 +2,7 @@
 pragma solidity 0.8.17;
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -13,7 +14,7 @@ import { IPool } from "./interfaces/IPool.sol";
  * @dev Interacts with Nexus Mutual on behalf of allowed accounts.
  * A Nexus Mutual member MUST transfer the membership to this contract to be able to access the protocol.
  */
-contract CoverManager is Ownable {
+contract CoverManager is Ownable, ReentrancyGuard {
   using SafeERC20 for IERC20;
 
   address public constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -91,7 +92,7 @@ contract CoverManager is Ownable {
   function buyCover(
     BuyCoverParams calldata params,
     PoolAllocationRequest[] calldata coverChunkRequests
-  ) external onlyAllowed returns (uint256 coverId) {
+  ) external nonReentrant onlyAllowed returns (uint256 coverId) {
     address asset = IPool(pool).getAsset(params.paymentAsset).assetAddress;
 
     bool isETH = params.paymentAsset == 0;
@@ -130,15 +131,15 @@ contract CoverManager is Ownable {
     // Validate _to to avoid losing funds
     if (_to != msg.sender && allowList[_to] == false) revert CoverManager_DepositNotAllowed();
 
-    IERC20(_asset).safeTransferFrom(msg.sender, address(this), _amount);
     funds[_asset][_to] += _amount;
+    IERC20(_asset).safeTransferFrom(msg.sender, address(this), _amount);
   }
 
   /**
    * @dev Allows to deposit ETH for paying the cover premiums
    * @param _to address allowed to use deposited ETH
    */
-  function depositETHOnBehalf(address _to) external payable {
+  function depositETHOnBehalf(address _to) external payable nonReentrant {
     // Validate _to to avoid losing funds
     if (_to != msg.sender && allowList[_to] == false) revert CoverManager_DepositNotAllowed();
 
@@ -151,7 +152,9 @@ contract CoverManager is Ownable {
    * @param _amount amount to withdraw
    * @param _to address to send withdrawn funds
    */
-  function withdraw(address _asset, uint256 _amount, address _to) external {
+  function withdraw(address _asset, uint256 _amount, address _to) external nonReentrant {
+    funds[_asset][msg.sender] -= _amount;
+
     if (_asset == ETH_ADDRESS) {
       // solhint-disable-next-line avoid-low-level-calls
       (bool success, ) = address(_to).call{ value: _amount }("");
@@ -159,8 +162,6 @@ contract CoverManager is Ownable {
     } else {
       IERC20(_asset).safeTransfer(_to, _amount);
     }
-
-    funds[_asset][msg.sender] -= _amount;
   }
 
   /**
