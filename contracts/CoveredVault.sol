@@ -81,7 +81,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
   error CoveredVault__WithdrawMoreThanMax();
   error CoveredVault__RedeemMoreThanMax();
   error CoveredVault__SendingETHFailed();
-  error CoveredVault__SameAddressWithdraw();
+  error CoveredVault__InvalidWithdrawAddress();
 
   /* ========== Constructor ========== */
 
@@ -310,7 +310,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
   }
 
   /**
-   * @dev Allows to withdraw deposited assets and ETH from funds
+   * @dev Allows to withdraw deposited assets in cover manager
    * @param _asset asset address to withdraw
    * @param _amount amount to withdraw
    * @param _to address to send withdrawn funds
@@ -320,19 +320,9 @@ contract CoveredVault is SafeERC4626, FeeManager {
     uint256 _amount,
     address _to
   ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (_to == address(this)) {
-      revert CoveredVault__SameAddressWithdraw();
-    }
+    if (_to == address(this)) revert CoveredVault__InvalidWithdrawAddress();
 
-    if (_asset == ETH_ADDRESS) {
-      // solhint-disable-next-line avoid-low-level-calls
-      (bool success, ) = address(_to).call{ value: _amount }("");
-      if (!success) {
-        revert CoveredVault__SendingETHFailed();
-      }
-    } else {
-      IERC20(_asset).safeTransfer(_to, _amount);
-    }
+    coverManager.withdraw(_asset, _amount, _to);
   }
 
   /* ========== Internal methods ========== */
