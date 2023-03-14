@@ -7,7 +7,6 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import { ICover, BuyCoverParams, PoolAllocationRequest } from "./interfaces/ICover.sol";
 import { IPool } from "./interfaces/IPool.sol";
-import { console } from "hardhat/console.sol";
 
 /**
  * @title CoverManager
