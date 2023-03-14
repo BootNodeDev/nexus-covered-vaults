@@ -177,30 +177,6 @@ contract CoverManager is Ownable {
   }
 
   /**
-   * @dev Allows to withdraw deposited assets and ETH from funds
-   * @param _asset asset address to withdraw
-   * @param _amount amount to withdraw
-   * @param _to address to send withdrawn funds
-   */
-  function withdrawCoverManagerAssets(address _asset, uint256 _amount, address _to) external onlyOwner {
-    if (_to == address(this)) {
-      revert("Send funds to a new address"); // TDOO use custom
-    }
-
-    if (_asset == ETH_ADDRESS) {
-      // solhint-disable-next-line avoid-low-level-calls
-      (bool success, ) = address(_to).call{ value: _amount }("");
-      if (!success) {
-        revert CoverManager_SendingEthFailed();
-      }
-    } else {
-      IERC20(_asset).safeTransfer(_to, _amount);
-    }
-
-    // TODO We should be able to iterate over funds to update the amounts
-  }
-
-  /**
    * @dev Used to receive buyCover remaining ETH and cover payments
    */
   receive() external payable {

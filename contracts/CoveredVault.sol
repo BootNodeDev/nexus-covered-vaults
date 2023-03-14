@@ -18,10 +18,14 @@ import { SafeERC4626 } from "./vault/SafeERC4626.sol";
 contract CoveredVault is SafeERC4626, FeeManager {
   using SafeERC20 for IERC20;
 
+  address public constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+
   /**
    * @dev CoverId assigned on buyCover
    */
   uint256 public coverId;
+
+  /** @dev CoverId assigned on buyCover */
 
   /**
    * @dev Address of the underlying vault
@@ -76,6 +80,8 @@ contract CoveredVault is SafeERC4626, FeeManager {
 
   error CoveredVault__WithdrawMoreThanMax();
   error CoveredVault__RedeemMoreThanMax();
+  error CoveredVault__SendingETHFailed();
+  error CoveredVault__SameAddressWithdraw();
 
   /* ========== Constructor ========== */
 
@@ -301,6 +307,32 @@ contract CoveredVault is SafeERC4626, FeeManager {
    */
   function claimFees(address _to) external onlyRole(DEFAULT_ADMIN_ROLE) {
     _claimFees(asset(), address(underlyingVault), _to);
+  }
+
+  /**
+   * @dev Allows to withdraw deposited assets and ETH from funds
+   * @param _asset asset address to withdraw
+   * @param _amount amount to withdraw
+   * @param _to address to send withdrawn funds
+   */
+  function withdrawCoverManagerAssets(
+    address _asset,
+    uint256 _amount,
+    address _to
+  ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    if (_to == address(this)) {
+      revert CoveredVault__SameAddressWithdraw();
+    }
+
+    if (_asset == ETH_ADDRESS) {
+      // solhint-disable-next-line avoid-low-level-calls
+      (bool success, ) = address(_to).call{ value: _amount }("");
+      if (!success) {
+        revert CoveredVault__SendingETHFailed();
+      }
+    } else {
+      IERC20(_asset).safeTransfer(_to, _amount);
+    }
   }
 
   /* ========== Internal methods ========== */
