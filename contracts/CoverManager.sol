@@ -152,7 +152,7 @@ contract CoverManager is Ownable, ReentrancyGuard {
     uint256 depeggedTokens,
     address payable payoutAddress,
     bytes calldata optionalParams
-  ) external onlyAllowed returns (uint256 payoutAmount, uint8 coverAsset) {
+  ) external onlyAllowed returns (uint256 payoutAmount, address asset) {
     if (ICover(cover).coverNFT().ownerOf(coverId) != msg.sender) {
       revert CoverManager_NotCoverNFTOwner();
     }
@@ -164,6 +164,7 @@ contract CoverManager is Ownable, ReentrancyGuard {
     IERC20(yieldTokenAddress).safeTransferFrom(msg.sender, address(this), depeggedTokens);
     IERC20(yieldTokenAddress).approve(yieldTokenIncident, depeggedTokens);
 
+    uint8 coverAsset;
     (payoutAmount, coverAsset) = IYieldTokenIncidents(yieldTokenIncident).redeemPayout(
       incidentId,
       coverId,
@@ -173,7 +174,9 @@ contract CoverManager is Ownable, ReentrancyGuard {
       optionalParams
     );
 
-    return (payoutAmount, coverAsset);
+    asset = IPool(pool).getAsset(coverAsset).assetAddress;
+
+    return (payoutAmount, asset);
   }
 
   /**
