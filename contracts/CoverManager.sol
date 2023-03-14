@@ -9,7 +9,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ICover, BuyCoverParams, PoolAllocationRequest, CoverData, Product } from "./interfaces/ICover.sol";
 import { IPool } from "./interfaces/IPool.sol";
 import { ICoverNFT } from "./interfaces/ICoverNFT.sol";
-import { IYieldTokenIncidents } from "./interfaces/IYTI.sol";
+import { IYieldTokenIncidents } from "./interfaces/IYieldTokenIncidents.sol";
 import { console } from "hardhat/console.sol";
 
 /**
