@@ -111,20 +111,18 @@ describe("CoverManager", function () {
   describe("Buy Cover", function () {
     it("Should succeed if is called with an ERC20 or ETH", async () => {
       const { coverManager, underlyingAsset } = await loadFixture(deployCoverManager);
-      const [user1, , , , kycUser] = await ethers.getSigners();
+      const [user1, , , , admin] = await ethers.getSigners();
 
-      await coverManager.connect(kycUser).addToAllowList(user1.address);
-      await underlyingAsset.mint(kycUser.address, buyCoverParams.amount);
-      await underlyingAsset.connect(kycUser).approve(coverManager.address, buyCoverParams.amount);
-      await coverManager
-        .connect(kycUser)
-        .depositOnBehalf(underlyingAsset.address, buyCoverParams.amount, user1.address);
+      await coverManager.connect(admin).addToAllowList(user1.address);
+      await underlyingAsset.mint(admin.address, buyCoverParams.amount);
+      await underlyingAsset.connect(admin).approve(coverManager.address, buyCoverParams.amount);
+      await coverManager.connect(admin).depositOnBehalf(underlyingAsset.address, buyCoverParams.amount, user1.address);
 
       await expect(
         coverManager.connect(user1).buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 1 }, [poolAlloc]),
       ).to.not.be.reverted;
 
-      await coverManager.connect(kycUser).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
+      await coverManager.connect(admin).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
       await coverManager
         .connect(user1)
         .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc]);
@@ -135,14 +133,14 @@ describe("CoverManager", function () {
 
     xit("Should return to sender amount not spent in ETH", async () => {
       const { coverManager, cover } = await loadFixture(deployCoverManager);
-      const [user1, , , , kycUser] = await ethers.getSigners();
+      const [user1, , , , admin] = await ethers.getSigners();
 
-      await coverManager.connect(kycUser).addToAllowList(user1.address);
+      await coverManager.connect(admin).addToAllowList(user1.address);
 
       const balanceBefore = await user1.getBalance();
 
       await setNextBlockBaseFeePerGas(0);
-      await coverManager.connect(kycUser).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
+      await coverManager.connect(admin).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
 
       await coverManager
         .connect(user1)
@@ -160,9 +158,9 @@ describe("CoverManager", function () {
 
     xit("Should return to sender amount not spent in asset", async () => {
       const { coverManager, cover, underlyingAsset } = await loadFixture(deployCoverManager);
-      const [user1, , , , kycUser] = await ethers.getSigners();
+      const [user1, , , , admin] = await ethers.getSigners();
 
-      await coverManager.connect(kycUser).addToAllowList(user1.address);
+      await coverManager.connect(admin).addToAllowList(user1.address);
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("10000"));
       await underlyingAsset.connect(user1).approve(coverManager.address, ethers.utils.parseEther("10000"));
 
@@ -188,13 +186,13 @@ describe("CoverManager", function () {
   describe("redeemCover", function () {
     it("Should revert if caller is not allowed", async () => {
       const { coverManager, cover, underlyingAsset } = await loadFixture(deployCoverManager);
-      const [user1, , , , kycUser] = await ethers.getSigners();
+      const [user1, , , , admin] = await ethers.getSigners();
 
       await expect(
         coverManager.connect(user1).redeemCover(1, 1, 0, 100, user1.address, []),
       ).to.be.revertedWithCustomError(coverManager, "CoverManager_NotAllowed");
 
-      await coverManager.connect(kycUser).addToAllowList(user1.address);
+      await coverManager.connect(admin).addToAllowList(user1.address);
 
       const products = [
         { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
@@ -202,7 +200,7 @@ describe("CoverManager", function () {
       ];
 
       await cover.setProducts(products);
-      await coverManager.connect(kycUser).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
+      await coverManager.connect(admin).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
       await coverManager
         .connect(user1)
         .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc]);
@@ -214,10 +212,10 @@ describe("CoverManager", function () {
 
     it("Should revert if caller is not the owner of coverNFT", async () => {
       const { coverManager, cover, underlyingAsset } = await loadFixture(deployCoverManager);
-      const [user1, user2, , , kycUser] = await ethers.getSigners();
+      const [user1, user2, , , admin] = await ethers.getSigners();
 
-      await coverManager.connect(kycUser).addToAllowList(user1.address);
-      await coverManager.connect(kycUser).addToAllowList(user2.address);
+      await coverManager.connect(admin).addToAllowList(user1.address);
+      await coverManager.connect(admin).addToAllowList(user2.address);
 
       const products = [
         { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
@@ -227,13 +225,13 @@ describe("CoverManager", function () {
       await cover.setProducts(products);
 
       // coverNFT 1
-      await coverManager.connect(kycUser).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
+      await coverManager.connect(admin).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
       await coverManager
         .connect(user1)
         .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc]);
 
       // coverNFT 2
-      await coverManager.connect(kycUser).depositETHOnBehalf(user2.address, { value: buyCoverParams.amount });
+      await coverManager.connect(admin).depositETHOnBehalf(user2.address, { value: buyCoverParams.amount });
       await coverManager
         .connect(user2)
         .buyCover({ ...buyCoverParams, owner: user2.address, paymentAsset: 0 }, [poolAlloc]);
