@@ -24,13 +24,14 @@ contract CoverManager is Ownable, ReentrancyGuard {
   address public immutable pool;
 
   mapping(address => bool) public allowList;
-  // TODO Update solidity and use naming?
   mapping(address => mapping(address => uint256)) public funds;
 
   /* ========== Events ========== */
 
   event Allowed(address indexed account);
   event Disallowed(address indexed account);
+  event Deposit(address indexed sender, address indexed owner, address asset, uint256 amount);
+  event Withdraw(address indexed owner, address indexed receiver, address asset, uint256 amount);
 
   /* ========== Custom Errors ========== */
 
@@ -158,8 +159,10 @@ contract CoverManager is Ownable, ReentrancyGuard {
     // Validate _to to avoid losing funds
     if (_to != msg.sender && allowList[_to] == false) revert CoverManager_DepositNotAllowed();
 
-    funds[_asset][_to] += _amount;
     IERC20(_asset).safeTransferFrom(msg.sender, address(this), _amount);
+    funds[_asset][_to] += _amount;
+
+    emit Deposit(msg.sender, _to, _asset, _amount);
   }
 
   /**
@@ -171,6 +174,8 @@ contract CoverManager is Ownable, ReentrancyGuard {
     if (_to != msg.sender && allowList[_to] == false) revert CoverManager_DepositNotAllowed();
 
     funds[ETH_ADDRESS][_to] += msg.value;
+
+    emit Deposit(msg.sender, _to, ETH_ADDRESS, msg.value);
   }
 
   /**
@@ -189,6 +194,8 @@ contract CoverManager is Ownable, ReentrancyGuard {
     } else {
       IERC20(_asset).safeTransfer(_to, _amount);
     }
+
+    emit Withdraw(msg.sender, _to, _asset, _amount);
   }
 
   /**
