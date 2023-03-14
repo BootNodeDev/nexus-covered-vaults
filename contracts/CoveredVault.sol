@@ -3,7 +3,7 @@ pragma solidity 0.8.17;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
-import { BuyCoverParams, PoolAllocationRequest } from "./interfaces/ICover.sol";
+import { BuyCoverParams, PoolAllocationRequest, CoverData, ICover, Product } from "./interfaces/ICover.sol";
 import { ICoverManager } from "./interfaces/ICoverManager.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -219,6 +219,39 @@ contract CoveredVault is SafeERC4626, FeeManager {
   /** @dev See {IERC4626-previewRedeem}. */
   function previewRedeem(uint256 shares) public view override returns (uint256) {
     return _convertToAssets(shares, Math.Rounding.Down, true, true);
+  }
+
+  // TODO Improve
+  /**
+   * @dev Allows to call Yield Token Incident' redeem cover
+   * Gets caller depeggedTokens to pay.
+   * @param incidentId identifier of YTI
+   * @param segmentId segment Id for cover
+   * @param depeggedTokens number of tokens to send
+   * @param optionalParams extra params
+   */
+  function redeemCover(
+    uint104 incidentId,
+    uint256 segmentId,
+    uint256 depeggedTokens,
+    bytes calldata optionalParams
+  ) external {
+    address cover = ICoverManager(coverManager).cover();
+
+    ICover(cover).coverNFT().approve(address(coverManager), coverId);
+    underlyingVault.approve(address(coverManager), depeggedTokens);
+
+    (uint256 payoutAmount, uint8 coverAsset) = coverManager.redeemCover(
+      incidentId,
+      uint32(coverId),
+      segmentId,
+      depeggedTokens,
+      payable(address(this)),
+      optionalParams
+    );
+
+    underlyingVaultShares -= depeggedTokens;
+    idleAssets += payoutAmount;
   }
 
   /* ========== Admin methods ========== */
