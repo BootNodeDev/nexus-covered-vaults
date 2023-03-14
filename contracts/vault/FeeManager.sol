@@ -199,11 +199,10 @@ abstract contract FeeManager is AccessManager {
    * @dev Calculates the fee to be subtracted from an amount
    * feeAmount = _amount * FeeN / FeeD
    * @param _amount total amount
-   * @param _fee fee numerator to be applied
    * @return the quantity of _amount to be considered as a fee
    */
-  function _calculateDepositFee(uint256 _amount, uint256 _fee) internal pure returns (uint256) {
-    return (_amount * _fee) / FEE_DENOMINATOR;
+  function _calculateDepositFee(uint256 _amount) internal view returns (uint256) {
+    return (_amount * depositFee) / FEE_DENOMINATOR;
   }
 
   /**
@@ -217,11 +216,10 @@ abstract contract FeeManager is AccessManager {
    * totalAmount = _amount * FeeD / (FeeD * (1 - FeeN/ FeeD))
    * totalAmount = _amount * FeeD / (FeeD - FeeN)
    * @param _amount amount
-   * @param _fee fee numerator to be applied
    * @return the amount from which after subtracting the fee would result in _amount
    */
-  function _calculateAmountIncludingDepositFee(uint256 _amount, uint256 _fee) internal pure returns (uint256) {
-    return (_amount * FEE_DENOMINATOR) / (FEE_DENOMINATOR - _fee);
+  function _calculateAmountIncludingDepositFee(uint256 _amount) internal view returns (uint256) {
+    return (_amount * FEE_DENOMINATOR) / (FEE_DENOMINATOR - depositFee);
   }
 
   /**
@@ -235,10 +233,26 @@ abstract contract FeeManager is AccessManager {
     return (_amount * secondsSinceLastUpdate * managementFee) / FEE_DENOMINATOR / FEE_MANAGER_PERIOD;
   }
 
-  function _accrueManagementFees(address asset, uint256 _amount) internal {
+  /**
+   * @dev Updates the accumulated deposit fees in asset
+   * @param _asset address of the asset
+   * @param _amount amount of asset charges as fee
+   */
+  function _accrueDepositFees(address _asset, uint256 _amount) internal {
+    accumulatedAssetFees += _amount;
+
+    emit FeeAccrued(_asset, _amount);
+  }
+
+  /**
+   * @dev Updates the accumulated management fees in underlying vault shares
+   * @param _asset address of the asset
+   * @param _amount amount of asset charges as fee
+   */
+  function _accrueManagementFees(address _asset, uint256 _amount) internal {
     accumulatedUVSharesFees += _amount;
 
-    emit FeeAccrued(asset, _amount);
+    emit FeeAccrued(_asset, _amount);
   }
 
   /**

@@ -117,16 +117,15 @@ contract CoveredVault is SafeERC4626, FeeManager {
 
     _updateAssets();
 
-    uint256 fee = _calculateDepositFee(_assets, depositFee);
+    uint256 fee = _calculateDepositFee(_assets);
     uint256 newVaultAssets = _assets - fee;
 
     uint256 shares = _convertToShares(newVaultAssets, Math.Rounding.Down, vaultTotalAssets);
     _deposit(_msgSender(), _receiver, _assets, shares);
 
     idleAssets += newVaultAssets;
-    accumulatedAssetFees += fee;
 
-    emit FeeAccrued(address(asset()), fee);
+    _accrueDepositFees(address(asset()), fee);
 
     return shares;
   }
@@ -141,15 +140,14 @@ contract CoveredVault is SafeERC4626, FeeManager {
     // Calculate the amount of assets that will be accounted for the vault for the shares
     uint256 newVaultAssets = _convertToAssets(_shares, Math.Rounding.Up, vaultTotalAssets);
     // Calculates the amount of assets the user needs to transfer for the required shares and the fees
-    uint256 totalAssets = _calculateAmountIncludingDepositFee(newVaultAssets, depositFee);
+    uint256 totalAssets = _calculateAmountIncludingDepositFee(newVaultAssets);
 
     _deposit(_msgSender(), _receiver, totalAssets, _shares);
     uint256 fee = totalAssets - newVaultAssets;
 
     idleAssets += newVaultAssets;
-    accumulatedAssetFees += fee;
 
-    emit FeeAccrued(address(asset()), fee);
+    _accrueDepositFees(address(asset()), fee);
 
     return newVaultAssets;
   }
@@ -187,14 +185,14 @@ contract CoveredVault is SafeERC4626, FeeManager {
 
   /** @dev See {IERC4626-previewDeposit}. */
   function previewDeposit(uint256 assets) public view override returns (uint256) {
-    uint256 fee = _calculateDepositFee(assets, depositFee);
+    uint256 fee = _calculateDepositFee(assets);
 
     return _convertToShares(assets - fee, Math.Rounding.Down, false, true);
   }
 
   /** @dev See {IERC4626-previewMint}. */
   function previewMint(uint256 shares) public view override returns (uint256) {
-    uint256 sharesIncludingFee = _calculateAmountIncludingDepositFee(shares, depositFee);
+    uint256 sharesIncludingFee = _calculateAmountIncludingDepositFee(shares);
 
     return _convertToAssets(sharesIncludingFee, Math.Rounding.Up, false, true);
   }
