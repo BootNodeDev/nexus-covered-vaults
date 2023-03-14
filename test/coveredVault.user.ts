@@ -199,7 +199,7 @@ describe("CoveredVault", function () {
 
       await vault.connect(admin).setDepositFee(0.05 * 1e4);
       await increase(2 * 7 * 24 * 60 * 60); // 2 weeks
-      await vault.connect(admin).applyFee();
+      await vault.connect(admin).applyDepositFee();
 
       const depositFee = await vault.depositFee();
       const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
@@ -324,7 +324,7 @@ describe("CoveredVault", function () {
 
       await vault.connect(admin).setDepositFee(0.05 * 1e4);
       await increase(2 * 7 * 24 * 60 * 60); // 2 weeks
-      await vault.connect(admin).applyFee();
+      await vault.connect(admin).applyDepositFee();
 
       const depositFee = await vault.depositFee();
       const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
@@ -507,7 +507,7 @@ describe("CoveredVault", function () {
 
       await vault.connect(admin).setDepositFee(0.05 * 1e4);
       await increase(2 * 7 * 24 * 60 * 60); // 2 weeks
-      await vault.connect(admin).applyFee();
+      await vault.connect(admin).applyDepositFee();
 
       const depositFee = await vault.depositFee();
       const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
@@ -551,7 +551,7 @@ describe("CoveredVault", function () {
       expect(vaultAfterDepositBalance).to.equal(vaultInitialBalance.add(depositAmount.mul(2)));
 
       expect(await vault.idleAssets()).to.equal(depositAmount.sub(fee).mul(2));
-      expect(await vault.accumulatedFees()).to.equal(fee.mul(2));
+      expect(await vault.accumulatedAssetFees()).to.equal(fee.mul(2));
 
       const investAmount = depositAmount.sub(fee).mul(2);
       await vault.connect(admin).invest(investAmount);
@@ -569,7 +569,7 @@ describe("CoveredVault", function () {
 
       expect(await vault.idleAssets()).to.equal(depositAmount.sub(fee).mul(2));
       expect(await vault.underlyingVaultShares()).to.equal(depositAmount.sub(fee).mul(2));
-      expect(await vault.accumulatedFees()).to.equal(fee.mul(4));
+      expect(await vault.accumulatedAssetFees()).to.equal(fee.mul(4));
     });
   });
 
@@ -701,7 +701,7 @@ describe("CoveredVault", function () {
 
       await vault.connect(admin).setDepositFee(0.05 * 1e4);
       await increase(2 * 7 * 24 * 60 * 60); // 2 weeks
-      await vault.connect(admin).applyFee();
+      await vault.connect(admin).applyDepositFee();
 
       const depositFee = await vault.depositFee();
       const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
@@ -747,7 +747,7 @@ describe("CoveredVault", function () {
       expect(vaultAfterDepositBalance).to.equal(vaultInitialBalance.add(depositAmount.mul(2)));
 
       expect(await vault.idleAssets()).to.equal(depositAmount.sub(fee).mul(2));
-      expect(await vault.accumulatedFees()).to.equal(fee.mul(2));
+      expect(await vault.accumulatedAssetFees()).to.equal(fee.mul(2));
 
       const investAmount = depositAmount.sub(fee).mul(2);
       await vault.connect(admin).invest(investAmount);
@@ -765,7 +765,7 @@ describe("CoveredVault", function () {
 
       expect(await vault.idleAssets()).to.equal(depositAmount.sub(fee).mul(2));
       expect(await vault.underlyingVaultShares()).to.equal(depositAmount.sub(fee).mul(2));
-      expect(await vault.accumulatedFees()).to.equal(fee.mul(4));
+      expect(await vault.accumulatedAssetFees()).to.equal(fee.mul(4));
     });
   });
 
