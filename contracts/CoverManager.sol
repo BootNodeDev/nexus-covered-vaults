@@ -38,11 +38,10 @@ contract CoverManager is Ownable {
   error CoverManager_AlreadyDisallowed();
   error CoverManager_SendingEthFailed();
   error CoverManager_InsufficientFunds();
+  error CoverManager_DepositNotAllowed();
 
   modifier onlyAllowed() {
-    if (!allowList[msg.sender]) {
-      revert CoverManager_NotAllowed();
-    }
+    if (!allowList[msg.sender]) revert CoverManager_NotAllowed();
     _;
   }
 
@@ -66,9 +65,7 @@ contract CoverManager is Ownable {
    * @param _account Address to allow calling methods
    */
   function addToAllowList(address _account) external onlyOwner {
-    if (allowList[_account]) {
-      revert CoverManager_AlreadyAllowed();
-    }
+    if (allowList[_account]) revert CoverManager_AlreadyAllowed();
 
     allowList[_account] = true;
     emit Allowed(_account);
@@ -79,9 +76,7 @@ contract CoverManager is Ownable {
    * @param _account Address to reject calling methods
    */
   function removeFromAllowList(address _account) external onlyOwner {
-    if (!allowList[_account]) {
-      revert CoverManager_AlreadyDisallowed();
-    }
+    if (!allowList[_account]) revert CoverManager_AlreadyDisallowed();
 
     allowList[_account] = false;
     emit Disallowed(_account);
@@ -101,9 +96,7 @@ contract CoverManager is Ownable {
 
     bool isETH = params.paymentAsset == 0;
 
-    if (funds[asset][msg.sender] < params.maxPremiumInAsset) {
-      revert CoverManager_InsufficientFunds();
-    }
+    if (funds[asset][msg.sender] < params.maxPremiumInAsset) revert CoverManager_InsufficientFunds();
 
     if (!isETH) {
       IERC20(asset).safeApprove(cover, params.maxPremiumInAsset);
@@ -135,9 +128,7 @@ contract CoverManager is Ownable {
    */
   function depositOnBehalf(address _asset, uint256 _amount, address _to) external {
     // Validate _to to avoid losing funds
-    if (_to != msg.sender && allowList[_to] == false) {
-      revert CoverManager_NotAllowed();
-    }
+    if (_to != msg.sender && allowList[_to] == false) revert CoverManager_DepositNotAllowed();
 
     IERC20(_asset).safeTransferFrom(msg.sender, address(this), _amount);
     funds[_asset][_to] += _amount;
@@ -149,9 +140,7 @@ contract CoverManager is Ownable {
    */
   function depositETHOnBehalf(address _to) external payable {
     // Validate _to to avoid losing funds
-    if (_to != msg.sender && allowList[_to] == false) {
-      revert CoverManager_NotAllowed(); // TODO use a different customError like _DepositNotAllowed()?
-    }
+    if (_to != msg.sender && allowList[_to] == false) revert CoverManager_DepositNotAllowed();
 
     funds[ETH_ADDRESS][_to] += msg.value;
   }
@@ -166,9 +155,7 @@ contract CoverManager is Ownable {
     if (_asset == ETH_ADDRESS) {
       // solhint-disable-next-line avoid-low-level-calls
       (bool success, ) = address(_to).call{ value: _amount }("");
-      if (!success) {
-        revert CoverManager_SendingEthFailed();
-      }
+      if (!success) revert CoverManager_SendingEthFailed();
     } else {
       IERC20(_asset).safeTransfer(_to, _amount);
     }
