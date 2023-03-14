@@ -18,8 +18,6 @@ import { SafeERC4626 } from "./vault/SafeERC4626.sol";
 contract CoveredVault is SafeERC4626, FeeManager {
   using SafeERC20 for IERC20;
 
-  address public constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-
   /**
    * @dev CoverId assigned on buyCover
    */
