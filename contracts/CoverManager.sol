@@ -149,7 +149,7 @@ contract CoverManager is Ownable {
    */
   function depositETHOnBehalf(address _to) external payable {
     // Validate _to to avoid losing funds
-    if (allowList[_to] == false) {
+    if (_to != msg.sender && allowList[_to] == false) {
       revert CoverManager_NotAllowed(); // TODO use a different customError like _DepositNotAllowed()?
     }
 
