@@ -127,7 +127,7 @@ contract CoverManager is Ownable, ReentrancyGuard {
    * @param _amount amount of asset on behalf of _to
    * @param _to address allowed to use deposited assets
    */
-  function depositOnBehalf(address _asset, uint256 _amount, address _to) external {
+  function depositOnBehalf(address _asset, uint256 _amount, address _to) external nonReentrant {
     // Validate _to to avoid losing funds
     if (_to != msg.sender && allowList[_to] == false) revert CoverManager_DepositNotAllowed();
 
