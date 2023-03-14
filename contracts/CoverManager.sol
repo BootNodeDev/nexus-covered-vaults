@@ -2,9 +2,9 @@
 pragma solidity 0.8.17;
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
 import { ICover, BuyCoverParams, PoolAllocationRequest } from "./interfaces/ICover.sol";
 import { IPool } from "./interfaces/IPool.sol";
 
@@ -13,19 +13,25 @@ import { IPool } from "./interfaces/IPool.sol";
  * @dev Interacts with Nexus Mutual on behalf of allowed accounts.
  * A Nexus Mutual member MUST transfer the membership to this contract to be able to access the protocol.
  */
-contract CoverManager is Ownable {
+contract CoverManager is Ownable, ReentrancyGuard {
   using SafeERC20 for IERC20;
+
+  address public constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+  uint256 public constant NEXUS_ETH_ASSET_ID = 0;
 
   address public immutable cover;
   address public immutable yieldTokenIncident;
   address public immutable pool;
 
   mapping(address => bool) public allowList;
+  mapping(address => mapping(address => uint256)) public funds;
 
   /* ========== Events ========== */
 
   event Allowed(address indexed account);
   event Disallowed(address indexed account);
+  event Deposit(address indexed sender, address indexed owner, address asset, uint256 amount);
+  event Withdraw(address indexed owner, address indexed receiver, address asset, uint256 amount);
 
   /* ========== Custom Errors ========== */
 
@@ -33,12 +39,11 @@ contract CoverManager is Ownable {
   error CoverManager_AlreadyAllowed();
   error CoverManager_AlreadyDisallowed();
   error CoverManager_SendingEthFailed();
-  error CoverManager_EthNotExpected();
+  error CoverManager_InsufficientFunds();
+  error CoverManager_DepositNotAllowed();
 
   modifier onlyAllowed() {
-    if (!allowList[msg.sender]) {
-      revert CoverManager_NotAllowed();
-    }
+    if (!allowList[msg.sender]) revert CoverManager_NotAllowed();
     _;
   }
 
@@ -62,9 +67,7 @@ contract CoverManager is Ownable {
    * @param _account Address to allow calling methods
    */
   function addToAllowList(address _account) external onlyOwner {
-    if (allowList[_account]) {
-      revert CoverManager_AlreadyAllowed();
-    }
+    if (allowList[_account]) revert CoverManager_AlreadyAllowed();
 
     allowList[_account] = true;
     emit Allowed(_account);
@@ -75,9 +78,7 @@ contract CoverManager is Ownable {
    * @param _account Address to reject calling methods
    */
   function removeFromAllowList(address _account) external onlyOwner {
-    if (!allowList[_account]) {
-      revert CoverManager_AlreadyDisallowed();
-    }
+    if (!allowList[_account]) revert CoverManager_AlreadyDisallowed();
 
     allowList[_account] = false;
     emit Disallowed(_account);
@@ -85,54 +86,116 @@ contract CoverManager is Ownable {
 
   /**
    * @dev Allows to call Cover.buyCover() on Nexus Mutual
-   * Gets caller funds to pay for the premium and returns the remaining
+   * Use available funds from caller to pay for the premium
    * @param params parameters to call buyCover
    * @param coverChunkRequests pool allocations for buyCover
    */
   function buyCover(
     BuyCoverParams calldata params,
     PoolAllocationRequest[] calldata coverChunkRequests
-  ) external payable onlyAllowed returns (uint256 coverId) {
-    uint256 initialBalance;
-    address asset;
+  ) external nonReentrant onlyAllowed returns (uint256 coverId) {
+    return
+      params.paymentAsset == NEXUS_ETH_ASSET_ID
+        ? _buyCoverETH(params, coverChunkRequests)
+        : _buyCover(params, coverChunkRequests);
+  }
 
-    bool isETH = params.paymentAsset == 0;
+  /**
+   * @dev Allows to call Cover.buyCover() using an ERC20 asset as payment asset
+   * @param params parameters to call buyCover
+   * @param coverChunkRequests pool allocations for buyCover
+   */
+  function _buyCover(
+    BuyCoverParams calldata params,
+    PoolAllocationRequest[] calldata coverChunkRequests
+  ) internal returns (uint256 coverId) {
+    address asset = IPool(pool).getAsset(params.paymentAsset).assetAddress;
 
-    if (!isETH) {
-      if (msg.value != 0) revert CoverManager_EthNotExpected();
+    if (funds[asset][msg.sender] < params.maxPremiumInAsset) revert CoverManager_InsufficientFunds();
 
-      asset = IPool(pool).getAsset(params.paymentAsset).assetAddress;
+    IERC20(asset).safeApprove(cover, params.maxPremiumInAsset);
 
-      initialBalance = IERC20(asset).balanceOf(address(this));
+    uint256 initialBalance = IERC20(asset).balanceOf(address(this));
+    coverId = ICover(cover).buyCover(params, coverChunkRequests);
+    uint256 finalBalance = IERC20(asset).balanceOf(address(this));
 
-      IERC20(asset).safeTransferFrom(msg.sender, address(this), params.maxPremiumInAsset);
-      IERC20(asset).safeApprove(cover, params.maxPremiumInAsset);
-    } else {
-      initialBalance = address(this).balance - msg.value;
-    }
+    // reset allowance to 0 to comply with tokens that implement the anti frontrunning approval fix (ie. USDT)
+    IERC20(asset).safeApprove(cover, 0);
 
-    coverId = ICover(cover).buyCover{ value: msg.value }(params, coverChunkRequests);
-
-    uint256 finalBalance = isETH ? address(this).balance : IERC20(asset).balanceOf(address(this));
-
-    uint256 remaining = finalBalance - initialBalance;
-
-    // ETH/Asset unspent is returned to buyer
-    if (remaining > 0) {
-      if (isETH) {
-        // solhint-disable-next-line avoid-low-level-calls
-        (bool success, ) = address(msg.sender).call{ value: remaining }("");
-        if (!success) {
-          revert CoverManager_SendingEthFailed();
-        }
-      } else {
-        IERC20(asset).safeTransfer(msg.sender, remaining);
-        // reset allowance to 0 to comply with tokens that implement the anti frontrunning approval fix (ie. USDT)
-        IERC20(asset).safeApprove(cover, 0);
-      }
-    }
+    uint256 spent = initialBalance - finalBalance;
+    funds[asset][msg.sender] -= spent;
 
     return coverId;
+  }
+
+  /**
+   * @dev Allows to call Cover.buyCover() using ETH as payment asset
+   * @param params parameters to call buyCover
+   * @param coverChunkRequests pool allocations for buyCover
+   */
+  function _buyCoverETH(
+    BuyCoverParams calldata params,
+    PoolAllocationRequest[] calldata coverChunkRequests
+  ) internal returns (uint256 coverId) {
+    if (funds[ETH_ADDRESS][msg.sender] < params.maxPremiumInAsset) revert CoverManager_InsufficientFunds();
+
+    uint256 initialBalance = address(this).balance;
+    coverId = ICover(cover).buyCover{ value: params.amount }(params, coverChunkRequests);
+    uint256 finalBalance = address(this).balance;
+
+    uint256 spent = initialBalance - finalBalance;
+    funds[ETH_ADDRESS][msg.sender] -= spent;
+
+    return coverId;
+  }
+
+  /**
+   * @dev Allows depositing assets for paying the cover premiums
+   * @param _asset asset deposited
+   * @param _amount amount of asset on behalf of _to
+   * @param _to address allowed to use deposited assets
+   */
+  function depositOnBehalf(address _asset, uint256 _amount, address _to) external nonReentrant {
+    // Validate _to to avoid losing funds
+    if (_to != msg.sender && allowList[_to] == false) revert CoverManager_DepositNotAllowed();
+
+    IERC20(_asset).safeTransferFrom(msg.sender, address(this), _amount);
+    funds[_asset][_to] += _amount;
+
+    emit Deposit(msg.sender, _to, _asset, _amount);
+  }
+
+  /**
+   * @dev Allows to deposit ETH for paying the cover premiums
+   * @param _to address allowed to use deposited ETH
+   */
+  function depositETHOnBehalf(address _to) external payable nonReentrant {
+    // Validate _to to avoid losing funds
+    if (_to != msg.sender && allowList[_to] == false) revert CoverManager_DepositNotAllowed();
+
+    funds[ETH_ADDRESS][_to] += msg.value;
+
+    emit Deposit(msg.sender, _to, ETH_ADDRESS, msg.value);
+  }
+
+  /**
+   * @dev Allows to withdraw deposited user' assets and ETH from funds
+   * @param _asset asset address to withdraw
+   * @param _amount amount to withdraw
+   * @param _to address to send withdrawn funds
+   */
+  function withdraw(address _asset, uint256 _amount, address _to) external nonReentrant {
+    funds[_asset][msg.sender] -= _amount;
+
+    if (_asset == ETH_ADDRESS) {
+      // solhint-disable-next-line avoid-low-level-calls
+      (bool success, ) = address(_to).call{ value: _amount }("");
+      if (!success) revert CoverManager_SendingEthFailed();
+    } else {
+      IERC20(_asset).safeTransfer(_to, _amount);
+    }
+
+    emit Withdraw(msg.sender, _to, _asset, _amount);
   }
 
   /**

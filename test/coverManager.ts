@@ -90,25 +90,27 @@ describe("CoverManager", function () {
   });
 
   describe("Buy Cover", function () {
-    it("Should revert if is called with an ERC20 and ETH", async () => {
-      const { coverManager } = await loadFixture(deployCoverManager);
+    it("Should succeed if is called with an ERC20 or ETH", async () => {
+      const { coverManager, underlyingAsset } = await loadFixture(deployCoverManager);
       const [user1, , , , kycUser] = await ethers.getSigners();
 
       await coverManager.connect(kycUser).addToAllowList(user1.address);
-      await expect(
-        coverManager
-          .connect(user1)
-          .buyCover({ ...buyCoverParams, paymentAsset: 1 }, [poolAlloc], { value: buyCoverParams.amount }),
-      ).to.be.revertedWithCustomError(coverManager, "CoverManager_EthNotExpected");
+      await underlyingAsset.mint(kycUser.address, buyCoverParams.amount);
+      await underlyingAsset.connect(kycUser).approve(coverManager.address, buyCoverParams.amount);
+      await coverManager
+        .connect(kycUser)
+        .depositOnBehalf(underlyingAsset.address, buyCoverParams.amount, user1.address);
 
-      await expect(
-        coverManager
-          .connect(user1)
-          .buyCover({ ...buyCoverParams, paymentAsset: 0 }, [poolAlloc], { value: buyCoverParams.amount }),
-      ).to.not.be.reverted;
+      await expect(coverManager.connect(user1).buyCover({ ...buyCoverParams, paymentAsset: 1 }, [poolAlloc])).to.not.be
+        .reverted;
+
+      await coverManager.connect(kycUser).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
+      await coverManager.connect(user1).buyCover({ ...buyCoverParams, paymentAsset: 0 }, [poolAlloc]);
+      await expect(coverManager.connect(user1).buyCover({ ...buyCoverParams, paymentAsset: 0 }, [poolAlloc])).to.not.be
+        .reverted;
     });
 
-    it("Should return to sender amount not spent in ETH", async () => {
+    xit("Should return to sender amount not spent in ETH", async () => {
       const { coverManager, cover } = await loadFixture(deployCoverManager);
       const [user1, , , , kycUser] = await ethers.getSigners();
 
@@ -130,7 +132,7 @@ describe("CoverManager", function () {
       expect(balanceAfter).to.be.eq(balanceBefore.sub(premiumAmount));
     });
 
-    it("Should return to sender amount not spent in asset", async () => {
+    xit("Should return to sender amount not spent in asset", async () => {
       const { coverManager, cover, underlyingAsset } = await loadFixture(deployCoverManager);
       const [user1, , , , kycUser] = await ethers.getSigners();
 

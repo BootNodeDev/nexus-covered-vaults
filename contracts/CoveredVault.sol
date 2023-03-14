@@ -23,6 +23,8 @@ contract CoveredVault is SafeERC4626, FeeManager {
    */
   uint256 public coverId;
 
+  /** @dev CoverId assigned on buyCover */
+
   /**
    * @dev Address of the underlying vault
    */
@@ -76,6 +78,8 @@ contract CoveredVault is SafeERC4626, FeeManager {
 
   error CoveredVault__WithdrawMoreThanMax();
   error CoveredVault__RedeemMoreThanMax();
+  error CoveredVault__SendingETHFailed();
+  error CoveredVault__InvalidWithdrawAddress();
 
   /* ========== Constructor ========== */
 
@@ -301,6 +305,22 @@ contract CoveredVault is SafeERC4626, FeeManager {
    */
   function claimFees(address _to) external onlyRole(DEFAULT_ADMIN_ROLE) {
     _claimFees(asset(), address(underlyingVault), _to);
+  }
+
+  /**
+   * @dev Allows to withdraw deposited assets in cover manager
+   * @param _asset asset address to withdraw
+   * @param _amount amount to withdraw
+   * @param _to address to send withdrawn funds
+   */
+  function withdrawCoverManagerAssets(
+    address _asset,
+    uint256 _amount,
+    address _to
+  ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    if (_to == address(this)) revert CoveredVault__InvalidWithdrawAddress();
+
+    coverManager.withdraw(_asset, _amount, _to);
   }
 
   /* ========== Internal methods ========== */
