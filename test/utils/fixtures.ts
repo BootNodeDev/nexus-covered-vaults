@@ -1,13 +1,26 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import {
+  ERC4626Mock,
+  ERC20Mock,
+  YieldTokenIncidentsMock,
+  CoverNFTMock,
+  CoverMock,
+  CoverManager,
+} from "../../typechain-types";
 
 const { parseEther } = ethers.utils;
 
 const vaultName = "USDC Covered Vault";
 const vaultSymbol = "cvUSDC";
 
-export async function deployUnderlyingVaultFixture() {
+type VaultFixture = Promise<{
+  underlyingVault: ERC4626Mock;
+  underlyingAsset: ERC20Mock;
+}>;
+
+export async function deployUnderlyingVaultFixture(): VaultFixture {
   const underlyingAsset = await ethers.deployContract("ERC20Mock", ["USDC", "USDC"]);
   const underlyingVault = await ethers.deployContract("ERC4626Mock", [
     underlyingAsset.address,
@@ -15,7 +28,7 @@ export async function deployUnderlyingVaultFixture() {
     "ivUSDC",
   ]);
 
-  return { underlyingVault, underlyingAsset };
+  return { underlyingVault, underlyingAsset } as unknown as VaultFixture;
 }
 
 export const deployVaultFixture = async () => deployVaultFixtureCreator();
@@ -59,13 +72,21 @@ export async function deployVaultFactoryFixture() {
   return { vaultFactory };
 }
 
+type CoverManagerFixture = Promise<{
+  yieldTokenIncidents: YieldTokenIncidentsMock;
+  underlyingAsset: ERC20Mock;
+  coverNFT: CoverNFTMock;
+  cover: CoverMock;
+  coverManager: CoverManager;
+}>;
 export async function deployCoverManager() {
   const [, , , , owner] = await ethers.getSigners();
 
   const yieldTokenIncidents = await ethers.deployContract("YieldTokenIncidentsMock");
   const underlyingAsset = await ethers.deployContract("ERC20Mock", ["DAI", "DAI"]);
   const pool = await ethers.deployContract("PoolMock", [underlyingAsset.address]);
-  const cover = await ethers.deployContract("CoverMock", [pool.address]);
+  const coverNFT = await ethers.deployContract("CoverNFTMock", ["coverNFT", "coverNFT"]);
+  const cover = await ethers.deployContract("CoverMock", [pool.address, coverNFT.address]);
   const coverManager = await ethers.deployContract(
     "CoverManager",
     [cover.address, yieldTokenIncidents.address, pool.address],
@@ -75,7 +96,7 @@ export async function deployCoverManager() {
   await setBalance(coverManager.address, ethers.utils.parseEther("1000"));
   await setBalance(cover.address, ethers.utils.parseEther("1000"));
 
-  return { coverManager, cover, yieldTokenIncidents, underlyingAsset };
+  return { coverManager, cover, yieldTokenIncidents, underlyingAsset, coverNFT } as unknown as CoverManagerFixture;
 }
 
 export async function mintVaultSharesFixture() {

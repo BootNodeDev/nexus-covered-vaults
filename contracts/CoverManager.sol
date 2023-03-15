@@ -5,8 +5,10 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { ICover, BuyCoverParams, PoolAllocationRequest } from "./interfaces/ICover.sol";
+
+import { ICover, BuyCoverParams, PoolAllocationRequest, CoverData, Product } from "./interfaces/ICover.sol";
 import { IPool } from "./interfaces/IPool.sol";
+import { IYieldTokenIncidents } from "./interfaces/IYieldTokenIncidents.sol";
 
 /**
  * @title CoverManager
@@ -41,6 +43,7 @@ contract CoverManager is Ownable, ReentrancyGuard {
   error CoverManager_SendingEthFailed();
   error CoverManager_InsufficientFunds();
   error CoverManager_DepositNotAllowed();
+  error CoverManager_NotCoverNFTOwner();
 
   modifier onlyAllowed() {
     if (!allowList[msg.sender]) revert CoverManager_NotAllowed();
@@ -126,6 +129,49 @@ contract CoverManager is Ownable, ReentrancyGuard {
     funds[asset][msg.sender] -= spent;
 
     return coverId;
+  }
+
+  /**
+   * @dev Allows to call Yield Token Incident to exchange the depegged tokens for the cover asset
+   * Caller should give allowance of the deppeged tokens and the cover nft.
+   * @param incidentId Index of the incident in YieldTokenIncidents
+   * @param coverId Id of the cover to be redeemed
+   * @param segmentId Index of the cover's segment that's eligible for redemption
+   * @param depeggedTokens The amount of depegged tokens to be swapped for the coverAsset
+   * @param payoutAddress Address to receive payout
+   * @param optionalParams extra params
+   * @return Amount of cover assets paid
+   * @return Address of the cover asset
+   */
+  function redeemCover(
+    uint104 incidentId,
+    uint32 coverId,
+    uint256 segmentId,
+    uint256 depeggedTokens,
+    address payable payoutAddress,
+    bytes calldata optionalParams
+  ) external onlyAllowed returns (uint256, address) {
+    if (ICover(cover).coverNFT().ownerOf(coverId) != msg.sender) revert CoverManager_NotCoverNFTOwner();
+
+    CoverData memory coverData = ICover(cover).coverData(coverId);
+    Product memory product = ICover(cover).products(coverData.productId);
+    address yieldTokenAddress = product.yieldTokenAddress;
+
+    IERC20(yieldTokenAddress).safeTransferFrom(msg.sender, address(this), depeggedTokens);
+    IERC20(yieldTokenAddress).approve(yieldTokenIncident, depeggedTokens);
+
+    (uint256 payoutAmount, uint8 coverAsset) = IYieldTokenIncidents(yieldTokenIncident).redeemPayout(
+      incidentId,
+      coverId,
+      segmentId,
+      depeggedTokens,
+      payoutAddress,
+      optionalParams
+    );
+
+    address asset = IPool(pool).getAsset(coverAsset).assetAddress;
+
+    return (payoutAmount, asset);
   }
 
   /**

@@ -1,29 +1,55 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.17;
 
-import { BuyCoverParams, PoolAllocationRequest } from "./../interfaces/ICover.sol";
+import { BuyCoverParams, PoolAllocationRequest, Product, CoverData, ProductParam } from "./../interfaces/ICover.sol";
 import { IPool } from "./../interfaces/IPool.sol";
+import { ICoverNFT } from "./../interfaces/ICoverNFT.sol";
+
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 contract CoverMock {
   address public pool;
+  ICoverNFT public coverNFT;
+
   uint256 public constant PREMIUM_DENOMINATOR = 1e4;
   uint256 public premium = 100; // 1%
-  uint256 public coverId = 1;
+  uint256 public coverId = 0;
+
+  Product[] internal _products;
+  mapping(uint => CoverData) private _coverData;
 
   error CoverMock_PremiumTooHigh();
   error CoverMock_PremiumAmountHigherThanMaxPremium();
   error CoverMock_InsufficientETHForPremium();
   error CoverMock_EthSendFailed();
 
-  constructor(address _pool) {
+  constructor(address _pool, address _coverNFT) {
     pool = _pool;
+    coverNFT = ICoverNFT(_coverNFT);
+  }
+
+  function coverData(uint256 _coverId) external view returns (CoverData memory) {
+    return _coverData[_coverId];
+  }
+
+  function products(uint256 _id) external view returns (Product memory) {
+    return _products[_id];
   }
 
   function setPremium(uint256 _premium) public {
     if (_premium > PREMIUM_DENOMINATOR) revert CoverMock_PremiumTooHigh();
     premium = _premium;
+  }
+
+  function setProducts(ProductParam[] calldata productParams) external {
+    for (uint i = 0; i < productParams.length; i++) {
+      ProductParam calldata param = productParams[i];
+      Product calldata product = param.product;
+
+      _products.push(product);
+    }
   }
 
   function buyCover(
@@ -36,6 +62,13 @@ contract CoverMock {
     }
 
     address asset = IPool(pool).getAsset(params.paymentAsset).assetAddress;
+
+    if (params.coverId == 0) {
+      // new cover
+      uint256 newCoverId = coverId + 1;
+      ICoverNFT(coverNFT).mint(params.owner, newCoverId);
+      _coverData[newCoverId] = CoverData(params.productId, params.coverAsset, 0 /* amountPaidOut */);
+    }
 
     bool isETH = params.paymentAsset == 0;
 
