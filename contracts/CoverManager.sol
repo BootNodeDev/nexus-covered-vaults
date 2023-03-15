@@ -6,7 +6,7 @@ import { ReentrancyGuard } from "@openzeppelin/contracts/security/ReentrancyGuar
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import { ICover, BuyCoverParams, PoolAllocationRequest, CoverData, Product } from "./interfaces/ICover.sol";
+import { ICover, BuyCoverParams, PoolAllocationRequest, CoverData, Product, CoverSegment } from "./interfaces/ICover.sol";
 import { IPool } from "./interfaces/IPool.sol";
 import { IYieldTokenIncidents } from "./interfaces/IYieldTokenIncidents.sol";
 
@@ -85,6 +85,17 @@ contract CoverManager is Ownable, ReentrancyGuard {
 
     allowList[_account] = false;
     emit Disallowed(_account);
+  }
+
+  /**
+   * @dev Return whether a cover has expired or not
+   * @param _coverId Id of the cover
+   */
+  function isCoverExpired(uint256 _coverId) external view returns (bool) {
+    uint256 count = ICover(cover).coverSegmentsCount(_coverId);
+    CoverSegment memory lastSegment = ICover(cover).coverSegmentWithRemainingAmount(_coverId, count - 1);
+
+    return lastSegment.start + lastSegment.period <= block.timestamp;
   }
 
   /**

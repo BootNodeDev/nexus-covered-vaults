@@ -20,6 +20,7 @@ contract CoveredVaultFactory {
    * @param _admin address' admin operator
    * @param _maxAssetsLimit New maximum asset amount limit
    * @param _productId productId to cover
+   * @param _coverAsset id of nexus cover asset
    * @param _coverManager CoverManager used to interact with Nexus
    * @param _depositFee Fee for new deposits
    * @param _managementFee Fee for managed assets
@@ -31,6 +32,7 @@ contract CoveredVaultFactory {
     address _admin,
     uint256 _maxAssetsLimit,
     uint24 _productId,
+    uint8 _coverAsset,
     ICoverManager _coverManager,
     uint256 _depositFee,
     uint256 _managementFee
@@ -42,6 +44,7 @@ contract CoveredVaultFactory {
       _admin,
       _maxAssetsLimit,
       _productId,
+      _coverAsset,
       _coverManager,
       _depositFee,
       _managementFee

@@ -50,6 +50,7 @@ async function deployVaultFixtureCreator(depositFee = 0, managementFee = 0) {
       admin.address,
       ethers.constants.MaxUint256,
       1,
+      0,
       coverManager.address,
       depositFee,
       managementFee,

@@ -102,10 +102,10 @@ abstract contract BaseERC4626 is ERC4626, ERC20Permit {
   function _convertToShares(
     uint256 assets,
     Math.Rounding rounding,
-    bool preview,
+    bool exact,
     bool accountForFees
   ) internal view returns (uint256 shares) {
-    return _convertToShares(assets, rounding, _totalAssets(preview, accountForFees));
+    return _convertToShares(assets, rounding, _totalAssets(exact, accountForFees));
   }
 
   /**
@@ -129,15 +129,15 @@ abstract contract BaseERC4626 is ERC4626, ERC20Permit {
   function _convertToAssets(
     uint256 shares,
     Math.Rounding rounding,
-    bool preview,
+    bool exact,
     bool accountForFees
   ) internal view returns (uint256 assets) {
-    return _convertToAssets(shares, rounding, _totalAssets(preview, accountForFees));
+    return _convertToAssets(shares, rounding, _totalAssets(exact, accountForFees));
   }
 
   /** @dev See {IERC4626-maxDeposit}. */
   function _maxDeposit(address) internal view virtual returns (uint256, uint256);
 
   /** @dev See {IERC4626-totalAssets}. */
-  function _totalAssets(bool _preview, bool accountForFees) internal view virtual returns (uint256);
+  function _totalAssets(bool _exact, bool accountForFees) internal view virtual returns (uint256);
 }
