@@ -241,7 +241,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
     ICover(cover).coverNFT().approve(address(coverManager), coverId);
     underlyingVault.approve(address(coverManager), depeggedTokens);
 
-    (uint256 payoutAmount, uint8 coverAsset) = coverManager.redeemCover(
+    (uint256 payoutAmount, ) = coverManager.redeemCover(
       incidentId,
       uint32(coverId),
       segmentId,
