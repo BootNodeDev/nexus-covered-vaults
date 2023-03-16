@@ -36,7 +36,7 @@ export const deployVaultFixture = async () => deployVaultFixtureCreator();
 async function deployVaultFixtureCreator(depositFee = 0, managementFee = 0) {
   const { underlyingVault, underlyingAsset } = await deployUnderlyingVaultFixture();
   const { vaultFactory } = await deployVaultFactoryFixture();
-  const { coverManager } = await deployCoverManager();
+  const { coverManager, cover, coverNFT, yieldTokenIncidents } = await deployCoverManager(underlyingAsset);
 
   const [, , , admin] = await ethers.getSigners();
 
@@ -64,12 +64,11 @@ async function deployVaultFixtureCreator(depositFee = 0, managementFee = 0) {
 
   const vault = await ethers.getContractAt("CoveredVault", vaultAddress);
 
-  return { vault, underlyingVault, underlyingAsset };
+  return { vault, underlyingVault, underlyingAsset, cover, coverNFT, yieldTokenIncidents, coverManager };
 }
 
 export async function deployVaultFactoryFixture() {
   const vaultFactory = await ethers.deployContract("CoveredVaultFactory");
-
   return { vaultFactory };
 }
 
@@ -81,11 +80,10 @@ type CoverManagerFixture = Promise<{
   coverManager: CoverManager;
 }>;
 
-export async function deployCoverManager() {
-  const [, , , , owner] = await ethers.getSigners();
+export async function deployCoverManager(underlyingAsset: ERC20Mock) {
+  const [, , , owner] = await ethers.getSigners();
 
   const yieldTokenIncidents = await ethers.deployContract("YieldTokenIncidentsMock");
-  const underlyingAsset = await ethers.deployContract("ERC20Mock", ["DAI", "DAI"]);
   const pool = await ethers.deployContract("PoolMock", [underlyingAsset.address]);
   const coverNFT = await ethers.deployContract("CoverNFTMock", ["coverNFT", "coverNFT"]);
   const cover = await ethers.deployContract("CoverMock", [pool.address, coverNFT.address]);

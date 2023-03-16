@@ -1,7 +1,7 @@
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { deployCoverManager } from "./utils/fixtures";
+import { deployVaultFixture } from "./utils/fixtures";
 import { setNextBlockBaseFeePerGas } from "@nomicfoundation/hardhat-network-helpers";
 import { parseEther } from "ethers/lib/utils";
 
@@ -46,7 +46,7 @@ const productParam = {
 describe("CoverManager", function () {
   describe("Deployment", function () {
     it("Should correctly set params", async function () {
-      const { cover, coverManager, yieldTokenIncidents } = await loadFixture(deployCoverManager);
+      const { cover, coverManager, yieldTokenIncidents } = await loadFixture(deployVaultFixture);
 
       expect(await coverManager.cover()).to.equal(cover.address);
       expect(await coverManager.yieldTokenIncident()).to.equal(yieldTokenIncidents.address);
@@ -55,7 +55,7 @@ describe("CoverManager", function () {
 
   describe("Access Control", function () {
     it("Should give owner rights to deployer", async function () {
-      const { coverManager } = await loadFixture(deployCoverManager);
+      const { coverManager } = await loadFixture(deployVaultFixture);
 
       const [, , , , owner] = await ethers.getSigners();
 
@@ -63,7 +63,7 @@ describe("CoverManager", function () {
     });
 
     it("Should revert if addToAllowList is called by anybody but owner", async function () {
-      const { coverManager } = await loadFixture(deployCoverManager);
+      const { coverManager } = await loadFixture(deployVaultFixture);
       const [user1, user2, , , owner] = await ethers.getSigners();
 
       await expect(coverManager.connect(user1).addToAllowList(user2.address)).to.be.revertedWith(
@@ -74,7 +74,7 @@ describe("CoverManager", function () {
     });
 
     it("Should revert if removeFromAllowList is called by anybody but owner", async function () {
-      const { coverManager } = await loadFixture(deployCoverManager);
+      const { coverManager } = await loadFixture(deployVaultFixture);
       const [user1, user2, , , owner] = await ethers.getSigners();
 
       await expect(coverManager.connect(user1).removeFromAllowList(user2.address)).to.be.revertedWith(
@@ -87,7 +87,7 @@ describe("CoverManager", function () {
 
   describe("allowed callers", function () {
     it("Should revert if is already allowed", async function () {
-      const { coverManager } = await loadFixture(deployCoverManager);
+      const { coverManager } = await loadFixture(deployVaultFixture);
       const [user1, , , , owner] = await ethers.getSigners();
 
       await coverManager.connect(owner).addToAllowList(user1.address);
@@ -98,7 +98,7 @@ describe("CoverManager", function () {
     });
 
     it("Should revert if is already disallowed", async function () {
-      const { coverManager } = await loadFixture(deployCoverManager);
+      const { coverManager } = await loadFixture(deployVaultFixture);
       const [user1, , , , owner] = await ethers.getSigners();
 
       await expect(coverManager.connect(owner).removeFromAllowList(user1.address)).to.be.revertedWithCustomError(
@@ -110,7 +110,7 @@ describe("CoverManager", function () {
 
   describe("Buy Cover", function () {
     it("Should succeed if is called with an ERC20 or ETH", async () => {
-      const { coverManager, underlyingAsset } = await loadFixture(deployCoverManager);
+      const { coverManager, underlyingAsset } = await loadFixture(deployVaultFixture);
       const [user1, , , , admin] = await ethers.getSigners();
 
       await coverManager.connect(admin).addToAllowList(user1.address);
@@ -132,7 +132,7 @@ describe("CoverManager", function () {
     });
 
     xit("Should return to sender amount not spent in ETH", async () => {
-      const { coverManager, cover } = await loadFixture(deployCoverManager);
+      const { coverManager, cover } = await loadFixture(deployVaultFixture);
       const [user1, , , , admin] = await ethers.getSigners();
 
       await coverManager.connect(admin).addToAllowList(user1.address);
@@ -157,7 +157,7 @@ describe("CoverManager", function () {
     });
 
     xit("Should return to sender amount not spent in asset", async () => {
-      const { coverManager, cover, underlyingAsset } = await loadFixture(deployCoverManager);
+      const { coverManager, cover, underlyingAsset } = await loadFixture(deployVaultFixture);
       const [user1, , , , admin] = await ethers.getSigners();
 
       await coverManager.connect(admin).addToAllowList(user1.address);
@@ -185,7 +185,7 @@ describe("CoverManager", function () {
 
   describe("redeemCover", function () {
     it("Should revert if caller is not allowed", async () => {
-      const { coverManager, cover, underlyingAsset } = await loadFixture(deployCoverManager);
+      const { coverManager, cover, underlyingAsset } = await loadFixture(deployVaultFixture);
       const [user1, , , , admin] = await ethers.getSigners();
 
       await expect(
@@ -211,7 +211,7 @@ describe("CoverManager", function () {
     });
 
     it("Should revert if caller is not the owner of coverNFT", async () => {
-      const { coverManager, cover, underlyingAsset } = await loadFixture(deployCoverManager);
+      const { coverManager, cover, underlyingAsset } = await loadFixture(deployVaultFixture);
       const [user1, user2, , , admin] = await ethers.getSigners();
 
       await coverManager.connect(admin).addToAllowList(user1.address);
