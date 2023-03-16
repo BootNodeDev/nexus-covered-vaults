@@ -8,6 +8,44 @@ import { getPermitSignature } from "./utils/getPermitSignature";
 
 const { parseEther } = ethers.utils;
 
+const poolAlloc = {
+  poolId: 0,
+  skip: false,
+  coverAmountInAsset: ethers.utils.parseEther("10"),
+};
+
+const buyCoverParams = {
+  coverId: 0,
+  owner: ethers.constants.AddressZero, // replace
+  productId: 1,
+  coverAsset: 0,
+  amount: ethers.utils.parseEther("10"),
+  period: 0,
+  maxPremiumInAsset: ethers.utils.parseEther("1"),
+  paymentAsset: ethers.constants.AddressZero, // replace
+  commissionRatio: 0,
+  commissionDestination: ethers.constants.AddressZero,
+  ipfsData: "",
+};
+
+const product = {
+  productType: 1,
+  yieldTokenAddress: ethers.constants.AddressZero,
+  coverAssets: 0,
+  initialPriceRatio: 4,
+  capacityReductionRatio: 1,
+  isDeprecated: false,
+  useFixedPrice: true,
+};
+
+const productParam = {
+  productName: "test",
+  productId: buyCoverParams.productId,
+  ipfsMetadata: buyCoverParams.ipfsData,
+  product,
+  allowedPools: [],
+};
+
 describe("CoveredVault", function () {
   describe("totalAssets", function () {
     it("Should account for assets in the underlying vault", async function () {
@@ -1348,6 +1386,44 @@ describe("CoveredVault", function () {
       expect(await vault.allowance(wallet.address, spender.address)).to.be.eq(0);
       await vault.permit(wallet.address, spender.address, value, constants.MaxUint256, v, r, s);
       expect(await vault.allowance(wallet.address, spender.address)).to.be.eq(value);
+    });
+  });
+
+  describe("redeemCover", function () {
+    it.only("Should update idleAssets and UVShares", async function () {
+      const { coverManager, cover, coverNFT, underlyingAsset, yieldTokenIncidents, vault } = await loadFixture(
+        deployVaultFixture,
+      );
+
+      const [user1, , , admin] = await ethers.getSigners();
+
+      await coverManager.connect(admin).addToAllowList(user1.address);
+      await coverManager.connect(admin).addToAllowList(admin.address);
+
+      await yieldTokenIncidents.connect(admin).setPayoutAmount(buyCoverParams.amount);
+
+      const products = [
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
+      ];
+
+      await cover.setProducts(products);
+
+      await coverManager.connect(user1).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
+      const preCoverId = await cover.coverId();
+      const preBalance = await coverNFT.connect(user1).balanceOf(user1.address);
+
+      await vault.connect(admin).buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc]);
+
+      const postCoverId = await cover.coverId();
+      const postBalance = await coverNFT.connect(user1).balanceOf(user1.address);
+
+      console.log({ preCoverId, postCoverId });
+      console.log({ preBalance, postBalance });
+
+      // TODO invest
+
+      await expect(vault.connect(user1).redeemCover(1, 0, 100, [])).to.not.be.reverted;
     });
   });
 });
