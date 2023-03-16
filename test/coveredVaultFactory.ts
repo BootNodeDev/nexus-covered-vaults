@@ -16,6 +16,8 @@ describe("CoveredVaultFactory", function () {
       let vaultAddress: string = "";
       const depositFee = 0.3 * 1e4; // 3%
       const managementFee = 0.5 * 1e4; // 5%
+      const productId = 1;
+      const coverAsset = 2;
 
       // deploy new vault
       await expect(
@@ -25,7 +27,8 @@ describe("CoveredVaultFactory", function () {
           vaultSymbol,
           admin.address,
           ethers.constants.MaxUint256,
-          1,
+          productId,
+          coverAsset,
           ethers.constants.AddressZero,
           depositFee,
           managementFee,
@@ -47,6 +50,8 @@ describe("CoveredVaultFactory", function () {
       expect(await vault.maxAssetsLimit()).to.equal(ethers.constants.MaxUint256);
       expect(await vault.depositFee()).to.equal(depositFee);
       expect(await vault.managementFee()).to.equal(managementFee);
+      expect(await vault.productId()).to.equal(productId);
+      expect(await vault.coverAsset()).to.equal(coverAsset);
 
       // erc4626 properties
       expect(await vault.asset()).to.equal(underlyingAsset.address);

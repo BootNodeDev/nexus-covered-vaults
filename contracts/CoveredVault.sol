@@ -36,6 +36,11 @@ contract CoveredVault is SafeERC4626, FeeManager {
   uint24 public immutable productId;
 
   /**
+   * @dev Id of nexus cover asset that should match the vault asset
+   */
+  uint8 public immutable coverAsset;
+
+  /**
    * @dev Address of the cover manager contract
    */
   ICoverManager public immutable coverManager;
@@ -80,6 +85,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
   error CoveredVault__RedeemMoreThanMax();
   error CoveredVault__SendingETHFailed();
   error CoveredVault__InvalidWithdrawAddress();
+  error CoveredVault__InvalidBuyCoverAmount();
 
   /* ========== Constructor ========== */
 
@@ -91,6 +97,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
    * @param _admin address of admin operator
    * @param _maxAssetsLimit New maximum asset amount limit
    * @param _productId id of covered product
+   * @param _coverAsset id of nexus cover asset
    * @param _coverManager address of cover manager contract
    * @param _depositFee Fee for new deposits
    * @param _managementFee Fee for managed assets
@@ -102,6 +109,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
     address _admin,
     uint256 _maxAssetsLimit,
     uint24 _productId,
+    uint8 _coverAsset,
     ICoverManager _coverManager,
     uint256 _depositFee,
     uint256 _managementFee
@@ -109,6 +117,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
     underlyingVault = _underlyingVault;
     maxAssetsLimit = _maxAssetsLimit;
     productId = _productId;
+    coverAsset = _coverAsset;
     coverManager = _coverManager;
   }
 
@@ -214,20 +223,48 @@ contract CoveredVault is SafeERC4626, FeeManager {
   /* ========== Admin methods ========== */
 
   /**
-   * @dev Purchase cover with this contract as owner
-   * @param params buyCoverParams but replacing owner and productId for this contract address and defined productId
-   * @param coverChunkRequests pool allocations for buyCover
+   * @dev Purchase cover for the assets.
+   * This contract will be the owner of the NFT representing the cover
+   * @param _amount amount of assets to be covered
+   * @param _period period of time for the cover. Min valid period in Nexus is 28 days
+   * @param _maxPremiumInAsset Max amount of premium to be paid for the cover
+   * @param _coverChunkRequests pool allocations for buyCover
    */
   function buyCover(
-    BuyCoverParams memory params,
-    PoolAllocationRequest[] memory coverChunkRequests
+    uint96 _amount,
+    uint32 _period,
+    uint256 _maxPremiumInAsset,
+    PoolAllocationRequest[] memory _coverChunkRequests
   ) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
-    params.owner = address(this);
-    params.productId = productId;
-    params.coverId = coverId;
+    // coverId = 0 is the flag to purchase a new cover
+    uint256 coverIdParam = 0;
 
-    uint256 newCoverId = ICoverManager(coverManager).buyCover(params, coverChunkRequests);
+    // If a cover was already purchased and it is not expired, it should edit it
+    if (coverId != 0 && !coverManager.isCoverExpired(coverId)) {
+      coverIdParam = coverId;
+    }
 
+    // ensure already invested assets will remain covered
+    uint256 investedAssets = _convertUnderlyingVaultShares(underlyingVaultShares, false);
+    if (_amount < investedAssets) revert CoveredVault__InvalidBuyCoverAmount();
+
+    BuyCoverParams memory params = BuyCoverParams({
+      coverId: coverIdParam,
+      owner: address(this),
+      productId: productId,
+      coverAsset: coverAsset,
+      amount: _amount,
+      period: _period,
+      maxPremiumInAsset: _maxPremiumInAsset,
+      paymentAsset: coverAsset,
+      commissionRatio: 0,
+      commissionDestination: address(0),
+      ipfsData: ""
+    });
+
+    uint256 newCoverId = coverManager.buyCover(params, _coverChunkRequests);
+
+    // If a new cover was purchased, update the coverId so next time the current cover is edited
     if (coverId == 0) {
       coverId = newCoverId;
     }
@@ -371,7 +408,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
   }
 
   /** @dev See {IERC4626-totalAssets}. */
-  function _totalAssets(bool _preview, bool accountForFees) internal view override returns (uint256) {
+  function _totalAssets(bool _exact, bool accountForFees) internal view override returns (uint256) {
     uint256 _underlyingVaultShares = underlyingVaultShares;
 
     if (accountForFees) {
@@ -380,10 +417,18 @@ contract CoveredVault is SafeERC4626, FeeManager {
       _underlyingVaultShares -= fee;
     }
 
-    uint256 investedAssets = _preview == true
-      ? underlyingVault.previewRedeem(_underlyingVaultShares)
-      : underlyingVault.convertToAssets(_underlyingVaultShares);
+    uint256 investedAssets = _convertUnderlyingVaultShares(_underlyingVaultShares, _exact);
+
     return investedAssets + idleAssets;
+  }
+
+  /**
+   * @dev Calculates the amount of assets that are represented by the shares
+   * @param _shares amount of shares
+   * @param _exact whether the exact redeemable amount should be calculated or not
+   */
+  function _convertUnderlyingVaultShares(uint256 _shares, bool _exact) internal view returns (uint256) {
+    return _exact == true ? underlyingVault.previewRedeem(_shares) : underlyingVault.convertToAssets(_shares);
   }
 
   /**

@@ -30,6 +30,15 @@ struct CoverData {
   uint96 amountPaidOut;
 }
 
+struct CoverSegment {
+  uint96 amount;
+  uint32 start;
+  uint32 period;
+  uint32 gracePeriod;
+  uint24 globalRewardsRatio;
+  uint24 globalCapacityRatio;
+}
+
 struct Product {
   uint16 productType;
   address yieldTokenAddress;
@@ -59,4 +68,8 @@ interface ICover {
   function coverData(uint coverId) external view returns (CoverData memory);
 
   function products(uint id) external view returns (Product memory);
+
+  function coverSegmentsCount(uint coverId) external view returns (uint);
+
+  function coverSegmentWithRemainingAmount(uint coverId, uint segmentId) external view returns (CoverSegment memory);
 }
