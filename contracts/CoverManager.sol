@@ -63,174 +63,7 @@ contract CoverManager is Ownable, ReentrancyGuard {
     pool = _pool;
   }
 
-  /* ========== Admin methods ========== */
-
-  /**
-   * @dev Allows an account to call methods in this contract
-   * @param _account Address to allow calling methods
-   */
-  function addToAllowList(address _account) external onlyOwner {
-    if (allowList[_account]) revert CoverManager_AlreadyAllowed();
-
-    allowList[_account] = true;
-    emit Allowed(_account);
-  }
-
-  /**
-   * @dev Remove permission of an account to call methods in this contract
-   * @param _account Address to reject calling methods
-   */
-  function removeFromAllowList(address _account) external onlyOwner {
-    if (!allowList[_account]) revert CoverManager_AlreadyDisallowed();
-
-    allowList[_account] = false;
-    emit Disallowed(_account);
-  }
-
-  /**
-   * @dev Returns whether a cover has expired or not
-   * @param _coverId Id of the cover
-   */
-  function isCoverExpired(uint256 _coverId) external view returns (bool) {
-    CoverSegment memory lastSegment = _getLastCoverSegment(_coverId);
-
-    return _isSegmentExpired(lastSegment);
-  }
-
-  /**
-   * @dev Returns the active covered amount in asset. Returns 0 if the cover expired
-   * @param _coverId Id of the cover
-   */
-  function getActiveCoverAmount(uint256 _coverId) external view returns (uint96) {
-    CoverSegment memory lastSegment = _getLastCoverSegment(_coverId);
-
-    return _isSegmentExpired(lastSegment) ? 0 : lastSegment.amount;
-  }
-
-  /**
-   * @dev Returns the last segment of the cover
-   * @param _coverId Id of the cover
-   */
-  function _getLastCoverSegment(uint256 _coverId) internal view returns (CoverSegment memory) {
-    uint256 count = ICover(cover).coverSegmentsCount(_coverId);
-    return ICover(cover).coverSegmentWithRemainingAmount(_coverId, count - 1);
-  }
-
-  /**
-   * @dev Returns whether a segment has expired or not
-   * @param _segment segment data
-   */
-  function _isSegmentExpired(CoverSegment memory _segment) internal view returns (bool) {
-    return _segment.start + _segment.period <= block.timestamp;
-  }
-
-  /**
-   * @dev Allows to call Cover.buyCover() on Nexus Mutual
-   * Use available funds from caller to pay for the premium
-   * @param params parameters to call buyCover
-   * @param coverChunkRequests pool allocations for buyCover
-   */
-  function buyCover(
-    BuyCoverParams calldata params,
-    PoolAllocationRequest[] calldata coverChunkRequests
-  ) external nonReentrant onlyAllowed returns (uint256 coverId) {
-    return
-      params.paymentAsset == NEXUS_ETH_ASSET_ID
-        ? _buyCoverETH(params, coverChunkRequests)
-        : _buyCover(params, coverChunkRequests);
-  }
-
-  /**
-   * @dev Allows to call Cover.buyCover() using an ERC20 asset as payment asset
-   * @param params parameters to call buyCover
-   * @param coverChunkRequests pool allocations for buyCover
-   */
-  function _buyCover(
-    BuyCoverParams calldata params,
-    PoolAllocationRequest[] calldata coverChunkRequests
-  ) internal returns (uint256 coverId) {
-    address asset = IPool(pool).getAsset(params.paymentAsset).assetAddress;
-
-    if (funds[asset][msg.sender] < params.maxPremiumInAsset) revert CoverManager_InsufficientFunds();
-
-    IERC20(asset).safeApprove(cover, params.maxPremiumInAsset);
-
-    uint256 initialBalance = IERC20(asset).balanceOf(address(this));
-    coverId = ICover(cover).buyCover(params, coverChunkRequests);
-    uint256 finalBalance = IERC20(asset).balanceOf(address(this));
-
-    // reset allowance to 0 to comply with tokens that implement the anti frontrunning approval fix (ie. USDT)
-    IERC20(asset).safeApprove(cover, 0);
-
-    uint256 spent = initialBalance - finalBalance;
-    funds[asset][msg.sender] -= spent;
-
-    return coverId;
-  }
-
-  /**
-   * @dev Allows to call Yield Token Incident to exchange the depegged tokens for the cover asset
-   * Caller should give allowance of the deppeged tokens and the cover nft.
-   * @param incidentId Index of the incident in YieldTokenIncidents
-   * @param coverId Id of the cover to be redeemed
-   * @param segmentId Index of the cover's segment that's eligible for redemption
-   * @param depeggedTokens The amount of depegged tokens to be swapped for the coverAsset
-   * @param payoutAddress Address to receive payout
-   * @param optionalParams extra params
-   * @return Amount of cover assets paid
-   * @return Address of the cover asset
-   */
-  function redeemCover(
-    uint104 incidentId,
-    uint32 coverId,
-    uint256 segmentId,
-    uint256 depeggedTokens,
-    address payable payoutAddress,
-    bytes calldata optionalParams
-  ) external onlyAllowed returns (uint256, address) {
-    if (ICover(cover).coverNFT().ownerOf(coverId) != msg.sender) revert CoverManager_NotCoverNFTOwner();
-
-    CoverData memory coverData = ICover(cover).coverData(coverId);
-    Product memory product = ICover(cover).products(coverData.productId);
-    address yieldTokenAddress = product.yieldTokenAddress;
-
-    IERC20(yieldTokenAddress).safeTransferFrom(msg.sender, address(this), depeggedTokens);
-    IERC20(yieldTokenAddress).approve(yieldTokenIncident, depeggedTokens);
-
-    (uint256 payoutAmount, uint8 coverAsset) = IYieldTokenIncidents(yieldTokenIncident).redeemPayout(
-      incidentId,
-      coverId,
-      segmentId,
-      depeggedTokens,
-      payoutAddress,
-      optionalParams
-    );
-
-    address asset = IPool(pool).getAsset(coverAsset).assetAddress;
-
-    return (payoutAmount, asset);
-  }
-
-  /**
-   * @dev Allows to call Cover.buyCover() using ETH as payment asset
-   * @param params parameters to call buyCover
-   * @param coverChunkRequests pool allocations for buyCover
-   */
-  function _buyCoverETH(
-    BuyCoverParams calldata params,
-    PoolAllocationRequest[] calldata coverChunkRequests
-  ) internal returns (uint256 coverId) {
-    if (funds[ETH_ADDRESS][msg.sender] < params.maxPremiumInAsset) revert CoverManager_InsufficientFunds();
-
-    uint256 initialBalance = address(this).balance;
-    coverId = ICover(cover).buyCover{ value: params.amount }(params, coverChunkRequests);
-    uint256 finalBalance = address(this).balance;
-
-    uint256 spent = initialBalance - finalBalance;
-    funds[ETH_ADDRESS][msg.sender] -= spent;
-
-    return coverId;
-  }
+  /* ========== Allowed methods ========== */
 
   /**
    * @dev Allows depositing assets for paying the cover premiums
@@ -282,9 +115,182 @@ contract CoverManager is Ownable, ReentrancyGuard {
   }
 
   /**
+   * @dev Allows to call Cover.buyCover() on Nexus Mutual
+   * Use available funds from caller to pay for the premium
+   * @param params parameters to call buyCover
+   * @param coverChunkRequests pool allocations for buyCover
+   */
+  function buyCover(
+    BuyCoverParams calldata params,
+    PoolAllocationRequest[] calldata coverChunkRequests
+  ) external nonReentrant onlyAllowed returns (uint256 coverId) {
+    return
+      params.paymentAsset == NEXUS_ETH_ASSET_ID
+        ? _buyCoverETH(params, coverChunkRequests)
+        : _buyCover(params, coverChunkRequests);
+  }
+
+  /**
+   * @dev Allows to call Yield Token Incident to exchange the depegged tokens for the cover asset
+   * Caller should give allowance of the deppeged tokens and the cover nft.
+   * @param incidentId Index of the incident in YieldTokenIncidents
+   * @param coverId Id of the cover to be redeemed
+   * @param segmentId Index of the cover's segment that's eligible for redemption
+   * @param depeggedTokens The amount of depegged tokens to be swapped for the coverAsset
+   * @param payoutAddress Address to receive payout
+   * @param optionalParams extra params
+   * @return Amount of cover assets paid
+   * @return Address of the cover asset
+   */
+  function redeemCover(
+    uint104 incidentId,
+    uint32 coverId,
+    uint256 segmentId,
+    uint256 depeggedTokens,
+    address payable payoutAddress,
+    bytes calldata optionalParams
+  ) external onlyAllowed returns (uint256, address) {
+    if (ICover(cover).coverNFT().ownerOf(coverId) != msg.sender) revert CoverManager_NotCoverNFTOwner();
+
+    CoverData memory coverData = ICover(cover).coverData(coverId);
+    Product memory product = ICover(cover).products(coverData.productId);
+    address yieldTokenAddress = product.yieldTokenAddress;
+
+    IERC20(yieldTokenAddress).safeTransferFrom(msg.sender, address(this), depeggedTokens);
+    IERC20(yieldTokenAddress).approve(yieldTokenIncident, depeggedTokens);
+
+    (uint256 payoutAmount, uint8 coverAsset) = IYieldTokenIncidents(yieldTokenIncident).redeemPayout(
+      incidentId,
+      coverId,
+      segmentId,
+      depeggedTokens,
+      payoutAddress,
+      optionalParams
+    );
+
+    address asset = IPool(pool).getAsset(coverAsset).assetAddress;
+
+    return (payoutAmount, asset);
+  }
+
+  /**
    * @dev Used to receive buyCover remaining ETH and cover payments
    */
   receive() external payable {
     // solhint-disable-previous-line no-empty-blocks
+  }
+
+  /* ========== Admin methods ========== */
+
+  /**
+   * @dev Allows an account to call methods in this contract
+   * @param _account Address to allow calling methods
+   */
+  function addToAllowList(address _account) external onlyOwner {
+    if (allowList[_account]) revert CoverManager_AlreadyAllowed();
+
+    allowList[_account] = true;
+    emit Allowed(_account);
+  }
+
+  /**
+   * @dev Remove permission of an account to call methods in this contract
+   * @param _account Address to reject calling methods
+   */
+  function removeFromAllowList(address _account) external onlyOwner {
+    if (!allowList[_account]) revert CoverManager_AlreadyDisallowed();
+
+    allowList[_account] = false;
+    emit Disallowed(_account);
+  }
+
+  /* ========== View methods ========== */
+
+  /**
+   * @dev Returns whether a cover has expired or not
+   * @param _coverId Id of the cover
+   */
+  function isCoverExpired(uint256 _coverId) external view returns (bool) {
+    CoverSegment memory lastSegment = _getLastCoverSegment(_coverId);
+
+    return _isSegmentExpired(lastSegment);
+  }
+
+  /**
+   * @dev Returns the active covered amount in asset. Returns 0 if the cover expired
+   * @param _coverId Id of the cover
+   */
+  function getActiveCoverAmount(uint256 _coverId) external view returns (uint96) {
+    CoverSegment memory lastSegment = _getLastCoverSegment(_coverId);
+
+    return _isSegmentExpired(lastSegment) ? 0 : lastSegment.amount;
+  }
+
+  /* ========== Internal methods ========== */
+
+  /**
+   * @dev Allows to call Cover.buyCover() using an ERC20 asset as payment asset
+   * @param params parameters to call buyCover
+   * @param coverChunkRequests pool allocations for buyCover
+   */
+  function _buyCover(
+    BuyCoverParams calldata params,
+    PoolAllocationRequest[] calldata coverChunkRequests
+  ) internal returns (uint256 coverId) {
+    address asset = IPool(pool).getAsset(params.paymentAsset).assetAddress;
+
+    if (funds[asset][msg.sender] < params.maxPremiumInAsset) revert CoverManager_InsufficientFunds();
+
+    IERC20(asset).safeApprove(cover, params.maxPremiumInAsset);
+
+    uint256 initialBalance = IERC20(asset).balanceOf(address(this));
+    coverId = ICover(cover).buyCover(params, coverChunkRequests);
+    uint256 finalBalance = IERC20(asset).balanceOf(address(this));
+
+    // reset allowance to 0 to comply with tokens that implement the anti frontrunning approval fix (ie. USDT)
+    IERC20(asset).safeApprove(cover, 0);
+
+    uint256 spent = initialBalance - finalBalance;
+    funds[asset][msg.sender] -= spent;
+
+    return coverId;
+  }
+
+  /**
+   * @dev Allows to call Cover.buyCover() using ETH as payment asset
+   * @param params parameters to call buyCover
+   * @param coverChunkRequests pool allocations for buyCover
+   */
+  function _buyCoverETH(
+    BuyCoverParams calldata params,
+    PoolAllocationRequest[] calldata coverChunkRequests
+  ) internal returns (uint256 coverId) {
+    if (funds[ETH_ADDRESS][msg.sender] < params.maxPremiumInAsset) revert CoverManager_InsufficientFunds();
+
+    uint256 initialBalance = address(this).balance;
+    coverId = ICover(cover).buyCover{ value: params.amount }(params, coverChunkRequests);
+    uint256 finalBalance = address(this).balance;
+
+    uint256 spent = initialBalance - finalBalance;
+    funds[ETH_ADDRESS][msg.sender] -= spent;
+
+    return coverId;
+  }
+
+  /**
+   * @dev Returns the last segment of the cover
+   * @param _coverId Id of the cover
+   */
+  function _getLastCoverSegment(uint256 _coverId) internal view returns (CoverSegment memory) {
+    uint256 count = ICover(cover).coverSegmentsCount(_coverId);
+    return ICover(cover).coverSegmentWithRemainingAmount(_coverId, count - 1);
+  }
+
+  /**
+   * @dev Returns whether a segment has expired or not
+   * @param _segment segment data
+   */
+  function _isSegmentExpired(CoverSegment memory _segment) internal view returns (bool) {
+    return _segment.start + _segment.period <= block.timestamp;
   }
 }
