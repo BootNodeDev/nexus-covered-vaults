@@ -13,4 +13,6 @@ interface ICoverManager {
   function withdraw(address _asset, uint256 _amount, address _to) external;
 
   function isCoverExpired(uint256 _coverId) external view returns (bool);
+
+  function getActiveCoverAmount(uint256 _coverId) external view returns (uint96);
 }

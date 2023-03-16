@@ -88,14 +88,40 @@ contract CoverManager is Ownable, ReentrancyGuard {
   }
 
   /**
-   * @dev Return whether a cover has expired or not
+   * @dev Returns whether a cover has expired or not
    * @param _coverId Id of the cover
    */
   function isCoverExpired(uint256 _coverId) external view returns (bool) {
-    uint256 count = ICover(cover).coverSegmentsCount(_coverId);
-    CoverSegment memory lastSegment = ICover(cover).coverSegmentWithRemainingAmount(_coverId, count - 1);
+    CoverSegment memory lastSegment = _getLastCoverSegment(_coverId);
 
-    return lastSegment.start + lastSegment.period <= block.timestamp;
+    return _isSegmentExpired(lastSegment);
+  }
+
+  /**
+   * @dev Returns the active covered amount in asset. Returns 0 if the cover expired
+   * @param _coverId Id of the cover
+   */
+  function getActiveCoverAmount(uint256 _coverId) external view returns (uint96) {
+    CoverSegment memory lastSegment = _getLastCoverSegment(_coverId);
+
+    return _isSegmentExpired(lastSegment) ? 0 : lastSegment.amount;
+  }
+
+  /**
+   * @dev Returns the last segment of the cover
+   * @param _coverId Id of the cover
+   */
+  function _getLastCoverSegment(uint256 _coverId) internal view returns (CoverSegment memory) {
+    uint256 count = ICover(cover).coverSegmentsCount(_coverId);
+    return ICover(cover).coverSegmentWithRemainingAmount(_coverId, count - 1);
+  }
+
+  /**
+   * @dev Returns whether a segment has expired or not
+   * @param _segment segment data
+   */
+  function _isSegmentExpired(CoverSegment memory _segment) internal view returns (bool) {
+    return _segment.start + _segment.period <= block.timestamp;
   }
 
   /**
