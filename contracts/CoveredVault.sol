@@ -86,6 +86,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
   error CoveredVault__SendingETHFailed();
   error CoveredVault__InvalidWithdrawAddress();
   error CoveredVault__InvalidBuyCoverAmount();
+  error CoveredVault__InvestExceedsCoverAmount();
 
   /* ========== Constructor ========== */
 
@@ -277,6 +278,11 @@ contract CoveredVault is SafeERC4626, FeeManager {
   function invest(uint256 _amount) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
     // calculate management fees
     uint256 fee = _calculateManagementFee(underlyingVaultShares);
+
+    uint256 investedAssets = _convertUnderlyingVaultShares(underlyingVaultShares - fee, false);
+    uint96 coveredAmount = coverManager.getActiveCoverAmount(coverId);
+
+    if (investedAssets + _amount > coveredAmount) revert CoveredVault__InvestExceedsCoverAmount();
 
     // deposit assets
     IERC20(asset()).approve(address(underlyingVault), _amount);
