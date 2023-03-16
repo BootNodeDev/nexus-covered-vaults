@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.17;
 
-import { BuyCoverParams, PoolAllocationRequest, Product, CoverData, ProductParam } from "./../interfaces/ICover.sol";
+import { ICover, BuyCoverParams, PoolAllocationRequest, Product, CoverData, ProductParam, CoverSegment } from "./../interfaces/ICover.sol";
 import { IPool } from "./../interfaces/IPool.sol";
 import { ICoverNFT } from "./../interfaces/ICoverNFT.sol";
 
@@ -9,16 +9,18 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
-contract CoverMock {
+contract CoverMock is ICover {
   address public pool;
   ICoverNFT public coverNFT;
 
   uint256 public constant PREMIUM_DENOMINATOR = 1e4;
   uint256 public premium = 100; // 1%
   uint256 public coverId = 0;
+  bool public mockSegments = true;
 
   Product[] internal _products;
-  mapping(uint => CoverData) private _coverData;
+  mapping(uint256 => CoverData) internal _coverData;
+  mapping(uint256 => CoverSegment[]) internal segments;
 
   error CoverMock_PremiumTooHigh();
   error CoverMock_PremiumAmountHigherThanMaxPremium();
@@ -87,5 +89,34 @@ contract CoverMock {
     }
 
     return (params.coverId == 0) ? ++coverId : params.coverId;
+  }
+
+  function setMockSegments(bool _value) public {
+    mockSegments = _value;
+  }
+
+  function setSegments(uint256 _coverId, CoverSegment[] calldata _segments) public {
+    for (uint i = 0; i < _segments.length; i++) {
+      segments[_coverId].push(_segments[i]);
+    }
+  }
+
+  function coverSegmentsCount(uint256 _coverId) external view returns (uint256) {
+    if (mockSegments) {
+      return 1;
+    }
+
+    return segments[_coverId].length;
+  }
+
+  function coverSegmentWithRemainingAmount(
+    uint256 _coverId,
+    uint256 _segmentId
+  ) external view returns (CoverSegment memory) {
+    if (mockSegments) {
+      return CoverSegment(type(uint96).max, uint32(block.timestamp - 10 days), 30 days, 0, 0, 0);
+    }
+
+    return segments[_coverId][_segmentId];
   }
 }
