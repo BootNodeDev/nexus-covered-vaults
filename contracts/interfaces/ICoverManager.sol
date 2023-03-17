@@ -10,7 +10,7 @@ interface ICoverManager {
   function buyCover(
     BuyCoverParams calldata params,
     PoolAllocationRequest[] calldata coverChunkRequests
-  ) external payable returns (uint256 coverId);
+  ) external returns (uint256 coverId);
 
   function withdraw(address _asset, uint256 _amount, address _to) external;
 

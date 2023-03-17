@@ -62,6 +62,7 @@ async function deployVaultFixtureCreator(depositFee = 0, managementFee = 0) {
       return true;
     });
 
+  await underlyingAsset.mint(yieldTokenIncidents.address, ethers.utils.parseEther("1000"));
   const vault = await ethers.getContractAt("CoveredVault", vaultAddress);
 
   return { vault, underlyingVault, underlyingAsset, cover, coverNFT, yieldTokenIncidents, coverManager };

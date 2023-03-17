@@ -8,6 +8,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import { ICover, BuyCoverParams, PoolAllocationRequest, CoverData, Product, CoverSegment } from "./interfaces/ICover.sol";
 import { IPool } from "./interfaces/IPool.sol";
+import { ICoverManager } from "./interfaces/ICoverManager.sol";
 import { IYieldTokenIncidents } from "./interfaces/IYieldTokenIncidents.sol";
 
 /**
@@ -15,7 +16,7 @@ import { IYieldTokenIncidents } from "./interfaces/IYieldTokenIncidents.sol";
  * @dev Interacts with Nexus Mutual on behalf of allowed accounts.
  * A Nexus Mutual member MUST transfer the membership to this contract to be able to access the protocol.
  */
-contract CoverManager is Ownable, ReentrancyGuard {
+contract CoverManager is Ownable, ReentrancyGuard, ICoverManager {
   using SafeERC20 for IERC20;
 
   address public constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -149,7 +150,7 @@ contract CoverManager is Ownable, ReentrancyGuard {
     uint256 depeggedTokens,
     address payable payoutAddress,
     bytes calldata optionalParams
-  ) external onlyAllowed returns (uint256, address) {
+  ) external onlyAllowed returns (uint256, uint8) {
     if (ICover(cover).coverNFT().ownerOf(coverId) != msg.sender) revert CoverManager_NotCoverNFTOwner();
 
     CoverData memory coverData = ICover(cover).coverData(coverId);
@@ -157,6 +158,7 @@ contract CoverManager is Ownable, ReentrancyGuard {
     address yieldTokenAddress = product.yieldTokenAddress;
 
     IERC20(yieldTokenAddress).safeTransferFrom(msg.sender, address(this), depeggedTokens);
+
     IERC20(yieldTokenAddress).approve(yieldTokenIncident, depeggedTokens);
 
     (uint256 payoutAmount, uint8 coverAsset) = IYieldTokenIncidents(yieldTokenIncident).redeemPayout(
@@ -168,9 +170,7 @@ contract CoverManager is Ownable, ReentrancyGuard {
       optionalParams
     );
 
-    address asset = IPool(pool).getAsset(coverAsset).assetAddress;
-
-    return (payoutAmount, asset);
+    return (payoutAmount, coverAsset);
   }
 
   /**

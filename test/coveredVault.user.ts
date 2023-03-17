@@ -1390,40 +1390,56 @@ describe("CoveredVault", function () {
   });
 
   describe("redeemCover", function () {
-    it.only("Should update idleAssets and UVShares", async function () {
-      const { coverManager, cover, coverNFT, underlyingAsset, yieldTokenIncidents, vault } = await loadFixture(
+    it("Should update idleAssets and UVShares", async function () {
+      const { coverManager, cover, underlyingAsset, underlyingVault, yieldTokenIncidents, vault } = await loadFixture(
         deployVaultFixture,
       );
 
       const [user1, , , admin] = await ethers.getSigners();
 
-      await coverManager.connect(admin).addToAllowList(user1.address);
-      await coverManager.connect(admin).addToAllowList(admin.address);
+      await coverManager.connect(admin).addToAllowList(vault.address);
 
-      await yieldTokenIncidents.connect(admin).setPayoutAmount(buyCoverParams.amount);
+      const payoutAmount = buyCoverParams.amount;
+      await yieldTokenIncidents
+        .connect(admin)
+        .setPayoutAmount(payoutAmount, underlyingVault.address, underlyingAsset.address);
 
       const products = [
-        { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
-        { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
       ];
 
       await cover.setProducts(products);
 
-      await coverManager.connect(user1).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
-      const preCoverId = await cover.coverId();
-      const preBalance = await coverNFT.connect(user1).balanceOf(user1.address);
+      await coverManager.connect(user1).depositETHOnBehalf(vault.address, { value: buyCoverParams.amount });
 
-      await vault.connect(admin).buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc]);
+      await vault
+        .connect(admin)
+        .buyCover(buyCoverParams.amount, buyCoverParams.period, buyCoverParams.maxPremiumInAsset, [poolAlloc]);
 
-      const postCoverId = await cover.coverId();
-      const postBalance = await coverNFT.connect(user1).balanceOf(user1.address);
+      await underlyingAsset.mint(user1.address, buyCoverParams.amount);
+      await underlyingAsset.connect(user1).approve(vault.address, buyCoverParams.amount);
+      await vault.connect(user1)["deposit(uint256,address)"](buyCoverParams.amount, user1.address);
 
-      console.log({ preCoverId, postCoverId });
-      console.log({ preBalance, postBalance });
+      await vault.connect(admin).invest(buyCoverParams.amount);
 
-      // TODO invest
+      const underlyingAssetBefore = await underlyingAsset.balanceOf(vault.address);
+      const underlyingVaultBefore = await underlyingVault.balanceOf(vault.address);
+      const idleAssetsBefore = await vault.idleAssets();
+      const underlyingVaultSharesBefore = await vault.underlyingVaultShares();
 
-      await expect(vault.connect(user1).redeemCover(1, 0, 100, [])).to.not.be.reverted;
+      const depeggedTokens = await vault.underlyingVaultShares();
+      await expect(vault.connect(user1).redeemCover(1, 0, depeggedTokens, [])).to.not.be.reverted;
+
+      const underlyingAssetAfter = await underlyingAsset.balanceOf(vault.address);
+      const underlyingVaultAfter = await underlyingVault.balanceOf(vault.address);
+      const idleAssetsAfter = await vault.idleAssets();
+      const underlyingVaultSharesAfter = await vault.underlyingVaultShares();
+
+      expect(underlyingAssetAfter).to.be.eq(underlyingAssetBefore.add(depeggedTokens));
+      expect(underlyingVaultAfter).to.be.eq(underlyingVaultBefore.sub(payoutAmount));
+      expect(idleAssetsAfter).to.be.eq(idleAssetsBefore.add(depeggedTokens));
+      expect(underlyingVaultSharesAfter).to.be.eq(underlyingVaultSharesBefore.sub(payoutAmount));
     });
   });
 });
