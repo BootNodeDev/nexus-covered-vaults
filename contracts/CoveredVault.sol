@@ -19,11 +19,29 @@ contract CoveredVault is SafeERC4626, FeeManager {
   using SafeERC20 for IERC20;
 
   /**
+   * @dev Rate threshold denominator 100% with two decimals
+   */
+  uint256 public constant RATE_THRESHOLD_DENOMINATOR = 100_00;
+
+  /**
+   * @dev Precision for the latest underlying vault exchange rate
+   */
+  uint256 public constant RATE_UNIT = 1 ether;
+
+  /**
+   * @dev Percentage rate threshold of an update in the underlying vault exchange rate
+   */
+  uint256 public uvRateThreshold;
+
+  /**
+   * @dev Tracks the latest underlying vault exchange rate with RATE_UNIT precision
+   */
+  uint256 public latestUvRate;
+
+  /**
    * @dev CoverId assigned on buyCover
    */
   uint256 public coverId;
-
-  /** @dev CoverId assigned on buyCover */
 
   /**
    * @dev Address of the underlying vault
@@ -79,6 +97,11 @@ contract CoveredVault is SafeERC4626, FeeManager {
    */
   event MaxAssetsLimitUpdated(uint256 newLimit);
 
+  /**
+   * @dev Emitted when the underlying vault rate threshold is updated
+   */
+  event RateThresholdUpdated(uint256 newRate);
+
   /* ========== Custom Errors ========== */
 
   error CoveredVault__WithdrawMoreThanMax();
@@ -87,6 +110,8 @@ contract CoveredVault is SafeERC4626, FeeManager {
   error CoveredVault__InvalidWithdrawAddress();
   error CoveredVault__InvalidBuyCoverAmount();
   error CoveredVault__InvestExceedsCoverAmount();
+  error CoveredVault__UnderlyingVaultBadRate();
+  error CoveredVault__RateThresholdOutOfBound();
 
   /* ========== Constructor ========== */
 
@@ -97,6 +122,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
    * @param _symbol Symbol of the vault
    * @param _admin address of admin operator
    * @param _maxAssetsLimit New maximum asset amount limit
+   * @param _uvRateThreshold Underlying vault exchange rate update threshold
    * @param _productId id of covered product
    * @param _coverAsset id of nexus cover asset
    * @param _coverManager address of cover manager contract
@@ -109,6 +135,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
     string memory _symbol,
     address _admin,
     uint256 _maxAssetsLimit,
+    uint256 _uvRateThreshold,
     uint24 _productId,
     uint8 _coverAsset,
     ICoverManager _coverManager,
@@ -117,9 +144,12 @@ contract CoveredVault is SafeERC4626, FeeManager {
   ) SafeERC4626(IERC20(_underlyingVault.asset()), _name, _symbol) FeeManager(_admin, _depositFee, _managementFee) {
     underlyingVault = _underlyingVault;
     maxAssetsLimit = _maxAssetsLimit;
+    uvRateThreshold = _uvRateThreshold;
     productId = _productId;
     coverAsset = _coverAsset;
     coverManager = _coverManager;
+
+    emit RateThresholdUpdated(_uvRateThreshold);
   }
 
   /* ========== User methods ========== */
@@ -343,6 +373,18 @@ contract CoveredVault is SafeERC4626, FeeManager {
   }
 
   /**
+   * @dev Sets the new percentage rate threshold
+   * @param _newThreshold new threshold value
+   */
+  function setUnderlyingVaultRateThreshold(uint256 _newThreshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    if (_newThreshold > RATE_THRESHOLD_DENOMINATOR) revert CoveredVault__RateThresholdOutOfBound();
+
+    uvRateThreshold = _newThreshold;
+
+    emit RateThresholdUpdated(_newThreshold);
+  }
+
+  /**
    * @dev Transfers accumulated fees. Only Admin can call this method
    * @param _to receiver of the claimed fees
    */
@@ -426,6 +468,23 @@ contract CoveredVault is SafeERC4626, FeeManager {
     uint256 investedAssets = _convertUnderlyingVaultShares(_underlyingVaultShares, _exact);
 
     return investedAssets + idleAssets;
+  }
+
+  /**
+   * @dev Calculates the amount of assets that are represented by the shares
+   * @param _assets amount of assets
+   * @param _shares amount of shares
+   */
+  function _validateUnderlyingVaultExchangeRate(uint256 _assets, uint256 _shares) internal {
+    uint256 newRate = (_assets * RATE_UNIT) / _shares;
+
+    if (latestUvRate != 0 && newRate < latestUvRate) {
+      uint256 minNewRate = latestUvRate - (latestUvRate * uvRateThreshold) / RATE_THRESHOLD_DENOMINATOR;
+
+      if (newRate < minNewRate) revert CoveredVault__UnderlyingVaultBadRate();
+    }
+
+    latestUvRate = newRate;
   }
 
   /**
