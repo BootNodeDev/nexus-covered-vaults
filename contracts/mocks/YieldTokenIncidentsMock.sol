@@ -13,18 +13,12 @@ contract YieldTokenIncidentsMock {
   }
 
   function redeemPayout(
-    // solhint-disable-next-line no-unused-vars
-    uint104 incidentId,
-    // solhint-disable-next-line no-unused-vars
-    uint32 coverId,
-    // solhint-disable-next-line no-unused-vars
-    uint segmentId,
-    // solhint-disable-next-line no-unused-vars
+    uint104 /* incidentId */,
+    uint32 /* coverId */,
+    uint /* segmentId */,
     uint depeggedTokens,
-    // solhint-disable-next-line no-unused-vars
     address payable payoutAddress,
-    // solhint-disable-next-line no-unused-vars
-    bytes calldata optionalParams
+    bytes calldata /* optionalParams */
   ) external returns (uint256, uint8) {
     yieldTokenAddress.transferFrom(msg.sender, address(this), depeggedTokens);
     underlyingAsset.transfer(payoutAddress, payoutAmount);

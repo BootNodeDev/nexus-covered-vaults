@@ -184,9 +184,21 @@ describe("CoverManager", function () {
   });
 
   describe("redeemCover", function () {
-    xit("Should revert if caller is not allowed", async () => {
-      const { coverManager, cover, underlyingAsset } = await loadFixture(deployVaultFixture);
+    it("Should revert if caller is not allowed", async () => {
+      const { coverManager, cover, underlyingAsset, underlyingVault, yieldTokenIncidents } = await loadFixture(
+        deployVaultFixture,
+      );
       const [user1, , , owner] = await ethers.getSigners();
+
+      const products = [
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+      ];
+
+      await cover.setProducts(products);
+      await yieldTokenIncidents
+        .connect(owner)
+        .setPayoutAmount(parseEther("1"), underlyingVault.address, underlyingAsset.address);
 
       await expect(
         coverManager.connect(user1).redeemCover(1, 1, 0, 100, user1.address, []),
@@ -194,35 +206,38 @@ describe("CoverManager", function () {
 
       await coverManager.connect(owner).addToAllowList(user1.address);
 
-      const products = [
-        { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
-        { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
-      ];
-
-      await cover.setProducts(products);
       await coverManager.connect(owner).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
       await coverManager
         .connect(user1)
         .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc]);
 
       await underlyingAsset.mint(user1.address, parseEther("100"));
-      await underlyingAsset.approve(coverManager.address, parseEther("100"));
+      await underlyingAsset.approve(underlyingVault.address, parseEther("100"));
+      await underlyingVault.deposit(parseEther("100"), user1.address);
+      await underlyingVault.approve(coverManager.address, parseEther("100"));
+      await underlyingAsset.mint(yieldTokenIncidents.address, ethers.utils.parseEther("1000"));
+
       await expect(coverManager.connect(user1).redeemCover(1, 1, 0, 100, user1.address, [])).to.not.be.reverted;
     });
 
-    xit("Should revert if caller is not the owner of coverNFT", async () => {
-      const { coverManager, cover, underlyingAsset } = await loadFixture(deployVaultFixture);
+    it("Should revert if caller is not the owner of coverNFT", async () => {
+      const { coverManager, cover, underlyingAsset, underlyingVault, yieldTokenIncidents } = await loadFixture(
+        deployVaultFixture,
+      );
       const [user1, user2, , owner] = await ethers.getSigners();
 
       await coverManager.connect(owner).addToAllowList(user1.address);
       await coverManager.connect(owner).addToAllowList(user2.address);
 
       const products = [
-        { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
-        { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
       ];
 
       await cover.setProducts(products);
+      await yieldTokenIncidents
+        .connect(owner)
+        .setPayoutAmount(parseEther("1"), underlyingVault.address, underlyingAsset.address);
 
       // coverNFT 1
       await coverManager.connect(owner).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
@@ -237,7 +252,10 @@ describe("CoverManager", function () {
         .buyCover({ ...buyCoverParams, owner: user2.address, paymentAsset: 0 }, [poolAlloc]);
 
       await underlyingAsset.mint(user1.address, parseEther("100"));
-      await underlyingAsset.approve(coverManager.address, parseEther("100"));
+      await underlyingAsset.approve(underlyingVault.address, parseEther("100"));
+      await underlyingVault.deposit(parseEther("100"), user1.address);
+      await underlyingVault.approve(coverManager.address, parseEther("100"));
+      await underlyingAsset.mint(yieldTokenIncidents.address, ethers.utils.parseEther("1000"));
 
       await expect(
         coverManager.connect(user1).redeemCover(1, 2, 0, 100, user1.address, []),
