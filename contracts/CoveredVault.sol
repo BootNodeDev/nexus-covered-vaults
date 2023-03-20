@@ -200,6 +200,13 @@ contract CoveredVault is SafeERC4626, FeeManager {
     return assets;
   }
 
+  /** @dev See {IERC4626-maxWithdraw}. */
+  function maxWithdraw(address owner) public view virtual override returns (uint256) {
+    (uint256 assets, ) = _convertToAssets(balanceOf(owner), Math.Rounding.Down, true, true);
+
+    return assets;
+  }
+
   /** @dev See {IERC4626-previewWithdraw}. */
   function previewWithdraw(uint256 assets) public view override returns (uint256) {
     return _convertToShares(assets, Math.Rounding.Up, true, true);
