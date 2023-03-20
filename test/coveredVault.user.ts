@@ -243,7 +243,8 @@ describe("CoveredVault", function () {
       const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
       const [user1, , , admin] = await ethers.getSigners();
 
-      expect(await vault.maxDeposit(user1.address)).to.equal(constants.MaxUint256);
+      const initialMaxAssetsLimit = parseEther("1000000000");
+      expect(await vault.maxDeposit(user1.address)).to.equal(initialMaxAssetsLimit);
 
       // Mint assets to user and deposit
       const mintAmount = parseEther("10000");
@@ -253,11 +254,11 @@ describe("CoveredVault", function () {
       const depositAmount = parseEther("1000");
       await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
 
-      expect(await vault.maxDeposit(user1.address)).to.equal(constants.MaxUint256.sub(depositAmount));
+      expect(await vault.maxDeposit(user1.address)).to.equal(initialMaxAssetsLimit.sub(depositAmount));
 
       await vault.connect(admin).invest(depositAmount);
       await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
-      expect(await vault.maxDeposit(user1.address)).to.equal(constants.MaxUint256.sub(depositAmount.mul(2)));
+      expect(await vault.maxDeposit(user1.address)).to.equal(initialMaxAssetsLimit.sub(depositAmount.mul(2)));
 
       await vault.connect(admin).setMaxAssetsLimit(depositAmount.mul(2));
       expect(await vault.maxDeposit(user1.address)).to.equal(0);
@@ -368,7 +369,8 @@ describe("CoveredVault", function () {
       const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
       const [user1, , , admin] = await ethers.getSigners();
 
-      expect(await vault.maxDeposit(user1.address)).to.equal(constants.MaxUint256);
+      const initialMaxAssetsLimit = parseEther("1000000000");
+      expect(await vault.maxDeposit(user1.address)).to.equal(initialMaxAssetsLimit);
 
       // Mint assets to user and deposit
       const mintAmount = parseEther("10000");
@@ -378,11 +380,11 @@ describe("CoveredVault", function () {
       const depositAmount = parseEther("1000");
       await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
 
-      expect(await vault.maxMint(user1.address)).to.equal(constants.MaxUint256.sub(depositAmount));
+      expect(await vault.maxMint(user1.address)).to.equal(initialMaxAssetsLimit.sub(depositAmount));
 
       await vault.connect(admin).invest(depositAmount);
       await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
-      expect(await vault.maxMint(user1.address)).to.equal(constants.MaxUint256.sub(depositAmount.mul(2)));
+      expect(await vault.maxMint(user1.address)).to.equal(initialMaxAssetsLimit.sub(depositAmount.mul(2)));
 
       await vault.connect(admin).setMaxAssetsLimit(depositAmount.mul(2));
       expect(await vault.maxMint(user1.address)).to.equal(0);
@@ -497,6 +499,48 @@ describe("CoveredVault", function () {
       await expect(
         vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address),
       ).to.be.revertedWithCustomError(vault, "CoveredVault__DepositMoreThanMax");
+    });
+
+    it("reverts if invalid underlying vault rate", async function () {
+      const { vault, underlyingVault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, user2, , admin] = await ethers.getSigners();
+
+      // set exchange rate threshold to 49%
+      await vault.connect(admin).setUnderlyingVaultRateThreshold(4900);
+
+      // Mint assets to user and deposit
+      const userAmount = parseEther("10000");
+      await underlyingAsset.mint(user1.address, userAmount);
+      await underlyingAsset.mint(user2.address, userAmount);
+
+      await underlyingAsset.connect(user1).approve(vault.address, userAmount);
+      await underlyingAsset.connect(user2).approve(vault.address, userAmount);
+
+      expect(await vault.idleAssets()).to.equal(0);
+      expect(await vault.latestUvRate()).to.equal(0);
+
+      const depositAssets = parseEther("1000");
+      await vault.connect(user1)["deposit(uint256,address)"](depositAssets, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(depositAssets);
+
+      // Deposit assets into underlying vault to the vault account
+      await vault.connect(admin).invest(depositAssets);
+
+      expect(await vault.latestUvRate()).to.equal(parseEther("1"));
+      // burn 50% of assets in underlying vault
+      await underlyingAsset.burn(underlyingVault.address, depositAssets.div(2));
+
+      await expect(
+        vault.connect(user2)["deposit(uint256,address)"](depositAssets, user2.address),
+      ).to.be.revertedWithCustomError(vault, "CoveredVault__UnderlyingVaultBadRate");
+
+      // set exchange rate threshold to 50%
+      await vault.connect(admin).setUnderlyingVaultRateThreshold(5000);
+
+      await expect(vault.connect(user2)["deposit(uint256,address)"](depositAssets, user2.address)).to.not.be.reverted;
+
+      expect(await vault.latestUvRate()).to.equal(parseEther("0.5"));
     });
   });
 
@@ -691,6 +735,50 @@ describe("CoveredVault", function () {
       await expect(
         vault.connect(user1)["mint(uint256,address)"](mintShares, user1.address),
       ).to.be.revertedWithCustomError(vault, "CoveredVault__MintMoreThanMax");
+    });
+
+    it("reverts if invalid underlying vault rate", async function () {
+      const { vault, underlyingVault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, user2, , admin] = await ethers.getSigners();
+
+      // set exchange rate threshold to 49%
+      await vault.connect(admin).setUnderlyingVaultRateThreshold(4900);
+
+      // Mint assets to user and deposit
+      const userAmount = parseEther("10000");
+      await underlyingAsset.mint(user1.address, userAmount);
+      await underlyingAsset.mint(user2.address, userAmount);
+
+      await underlyingAsset.connect(user1).approve(vault.address, userAmount);
+      await underlyingAsset.connect(user2).approve(vault.address, userAmount);
+
+      expect(await vault.idleAssets()).to.equal(0);
+      expect(await vault.latestUvRate()).to.equal(0);
+
+      const mintShares = parseEther("1000");
+      const depositAssets = mintShares; // 1:1 rate
+      await vault.connect(user1)["deposit(uint256,address)"](mintShares, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(depositAssets);
+
+      // Deposit assets into underlying vault to the vault account
+      await vault.connect(admin).invest(mintShares);
+      expect(await vault.idleAssets()).to.equal(0);
+      expect(await vault.latestUvRate()).to.equal(parseEther("1"));
+
+      // burn 50% of assets in underlying vault
+      await underlyingAsset.burn(underlyingVault.address, depositAssets.div(2));
+
+      await expect(
+        vault.connect(user2)["mint(uint256,address)"](mintShares, user2.address),
+      ).to.be.revertedWithCustomError(vault, "CoveredVault__UnderlyingVaultBadRate");
+
+      // set exchange rate threshold to 50%
+      await vault.connect(admin).setUnderlyingVaultRateThreshold(5000);
+
+      await expect(vault.connect(user2)["mint(uint256,address)"](mintShares, user2.address)).to.not.be.reverted;
+
+      expect(await vault.latestUvRate()).to.equal(parseEther("0.5"));
     });
   });
 
@@ -978,6 +1066,42 @@ describe("CoveredVault", function () {
       );
       await expect(redeemTx).to.changeTokenBalance(vault, user1.address, user1Balance.mul(-1));
     });
+
+    it("reverts if invalid underlying vault rate", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      // set exchange rate threshold to 49%
+      await vault.connect(admin).setUnderlyingVaultRateThreshold(4900);
+
+      const user1Balance = await vault.balanceOf(user1.address);
+      const initialUser1Assets = await vault.convertToAssets(user1Balance);
+
+      expect(await vault.idleAssets()).to.equal(initialUser1Assets);
+      expect(await vault.underlyingVaultShares()).to.equal(0);
+
+      // Invest all assets into underlying vault
+      const totalAssets = await underlyingAsset.balanceOf(vault.address);
+      await vault.connect(admin).invest(totalAssets);
+
+      expect(await vault.idleAssets()).to.equal(0);
+      expect(await vault.underlyingVaultShares()).to.equal(initialUser1Assets);
+      expect(await vault.latestUvRate()).to.equal(parseEther("1"));
+
+      // burn 50% of assets in underlying vault
+      await underlyingAsset.burn(underlyingVault.address, user1Balance.div(2));
+
+      await expect(
+        vault["redeem(uint256,address,address)"](user1Balance, user1.address, user1.address),
+      ).to.be.revertedWithCustomError(vault, "CoveredVault__UnderlyingVaultBadRate");
+
+      // set exchange rate threshold to 50%
+      await vault.connect(admin).setUnderlyingVaultRateThreshold(5000);
+
+      await vault["redeem(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      expect(await vault.latestUvRate()).to.equal(parseEther("0.5"));
+    });
   });
 
   describe("withdraw", function () {
@@ -1198,6 +1322,43 @@ describe("CoveredVault", function () {
         [totalAssets.add(yieldAmount), user2Amount.add(yieldAmount).mul(-1), user2Amount.mul(-1)],
       );
       await expect(withdrawTx).to.changeTokenBalance(vault, user1.address, user1Shares.mul(-1));
+    });
+
+    it("reverts if invalid underlying vault rate", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      // set exchange rate threshold to 49%
+      await vault.connect(admin).setUnderlyingVaultRateThreshold(4900);
+
+      const user1Shares = await vault.balanceOf(user1.address);
+      const user1Balance = await vault.convertToAssets(user1Shares);
+
+      expect(await vault.idleAssets()).to.equal(user1Balance);
+      expect(await vault.underlyingVaultShares()).to.equal(0);
+
+      // Invest all assets into underlying vault
+      const totalAssets = await underlyingAsset.balanceOf(vault.address);
+      await vault.connect(admin).invest(totalAssets);
+
+      expect(await vault.idleAssets()).to.equal(0);
+      expect(await vault.underlyingVaultShares()).to.equal(totalAssets);
+
+      expect(await vault.latestUvRate()).to.equal(parseEther("1"));
+
+      // burn 50% of assets in underlying vault
+      await underlyingAsset.burn(underlyingVault.address, user1Balance.div(2));
+
+      await expect(
+        vault["withdraw(uint256,address,address)"](user1Balance.div(2), user1.address, user1.address),
+      ).to.be.revertedWithCustomError(vault, "CoveredVault__UnderlyingVaultBadRate");
+
+      // set exchange rate threshold to 50%
+      await vault.connect(admin).setUnderlyingVaultRateThreshold(5000);
+
+      await vault["withdraw(uint256,address,address)"](user1Balance.div(2), user1.address, user1.address);
+
+      expect(await vault.latestUvRate()).to.equal(parseEther("0.5"));
     });
   });
 

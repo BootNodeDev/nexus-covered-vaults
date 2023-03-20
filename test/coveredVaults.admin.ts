@@ -15,6 +15,8 @@ describe("CoveredVault", function () {
     it("Should correctly set params", async function () {
       const { vault, underlyingVault, underlyingAsset } = await loadFixture(deployVaultFixture);
 
+      const maxAssetsLimit = parseEther("1000000000");
+
       // covered vault properties
       expect(await vault.underlyingVault()).to.equal(underlyingVault.address);
       // erc4626 properties
@@ -23,7 +25,7 @@ describe("CoveredVault", function () {
       expect(await vault.name()).to.equal(vaultName);
       expect(await vault.symbol()).to.equal(vaultSymbol);
       expect(await vault.decimals()).to.equal(await underlyingAsset.decimals());
-      expect(await vault.maxAssetsLimit()).to.equal(ethers.constants.MaxUint256);
+      expect(await vault.maxAssetsLimit()).to.equal(maxAssetsLimit);
     });
   });
 
@@ -132,6 +134,37 @@ describe("CoveredVault", function () {
         .to.emit(vault, "Invested")
         .withArgs(amount, amount, admin.address);
     });
+
+    it("reverts if invalid underlying vault rate", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const amount = parseEther("1000");
+
+      const investAmount = amount.div(2);
+
+      await vault.connect(admin).invest(investAmount);
+
+      expect(await vault.latestUvRate()).to.equal(parseEther("1"));
+
+      // burn 50% of assets in underlying vault
+      await underlyingAsset.burn(underlyingVault.address, investAmount.div(2));
+
+      // set exchange rate threshold to 49%
+      await vault.connect(admin).setUnderlyingVaultRateThreshold(4900);
+
+      await expect(vault.connect(admin).invest(investAmount)).to.be.revertedWithCustomError(
+        vault,
+        "CoveredVault__UnderlyingVaultBadRate",
+      );
+
+      // set exchange rate threshold to 50%
+      await vault.connect(admin).setUnderlyingVaultRateThreshold(5000);
+
+      await vault.connect(admin).invest(investAmount);
+
+      expect(await vault.latestUvRate()).to.equal(parseEther("0.5"));
+    });
   });
 
   describe("uninvest", function () {
@@ -222,6 +255,36 @@ describe("CoveredVault", function () {
       await expect(vault.connect(admin).uninvest(amount))
         .to.emit(vault, "UnInvested")
         .withArgs(amount, amount, admin.address);
+    });
+
+    it("reverts if invalid underlying vault rate", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const amount = parseEther("1000");
+      const uninvestAmount = amount.div(2);
+
+      await vault.connect(admin).invest(amount);
+
+      expect(await vault.latestUvRate()).to.equal(parseEther("1"));
+
+      // burn 50% of assets in underlying vault
+      await underlyingAsset.burn(underlyingVault.address, amount.div(2));
+
+      // set exchange rate threshold to 49%
+      await vault.connect(admin).setUnderlyingVaultRateThreshold(4900);
+
+      await expect(vault.connect(admin).uninvest(uninvestAmount)).to.be.revertedWithCustomError(
+        vault,
+        "CoveredVault__UnderlyingVaultBadRate",
+      );
+
+      // set exchange rate threshold to 50%
+      await vault.connect(admin).setUnderlyingVaultRateThreshold(5000);
+
+      await vault.connect(admin).uninvest(uninvestAmount);
+
+      expect(await vault.latestUvRate()).to.equal(parseEther("0.5"));
     });
   });
 

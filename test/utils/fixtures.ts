@@ -42,6 +42,7 @@ async function deployVaultFixtureCreator(depositFee = 0, managementFee = 0) {
   const [, , , admin] = await ethers.getSigners();
 
   let vaultAddress: string = "";
+  const maxAssetsLimit = parseEther("1000000000");
 
   await expect(
     vaultFactory.create(
@@ -49,7 +50,7 @@ async function deployVaultFixtureCreator(depositFee = 0, managementFee = 0) {
       vaultName,
       vaultSymbol,
       admin.address,
-      ethers.constants.MaxUint256,
+      maxAssetsLimit,
       10000,
       1,
       0,

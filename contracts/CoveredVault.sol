@@ -522,12 +522,12 @@ contract CoveredVault is SafeERC4626, FeeManager {
    */
   function _validateUnderlyingVaultExchangeRate(uint256 _newRate) internal {
     if (latestUvRate != 0 && _newRate < latestUvRate) {
-      if (_newRate < latestUvRate) {
-        uint256 minNewRate = latestUvRate - (latestUvRate * uvRateThreshold) / RATE_THRESHOLD_DENOMINATOR;
+      uint256 minNewRate = latestUvRate - (latestUvRate * uvRateThreshold) / RATE_THRESHOLD_DENOMINATOR;
 
-        if (_newRate < minNewRate) revert CoveredVault__UnderlyingVaultBadRate();
-      }
+      if (_newRate < minNewRate) revert CoveredVault__UnderlyingVaultBadRate();
+    }
 
+    if (_newRate != latestUvRate) {
       latestUvRate = _newRate;
     }
   }
