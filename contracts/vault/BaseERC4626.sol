@@ -42,7 +42,8 @@ abstract contract BaseERC4626 is ERC4626, ERC20Permit {
 
   /** @dev See {IERC4626-totalAssets}. */
   function totalAssets() public view override returns (uint256) {
-    return _totalAssets(true, true);
+    (uint256 totalVaultAssets, ) = _totalAssets(true, true);
+    return totalVaultAssets;
   }
 
   /** @dev See {IERC4626-convertToShares}. */
@@ -51,28 +52,29 @@ abstract contract BaseERC4626 is ERC4626, ERC20Permit {
   }
 
   /** @dev See {IERC4626-convertToAssets}. */
-  function convertToAssets(uint256 shares) public view override returns (uint256 assets) {
-    return _convertToAssets(shares, Math.Rounding.Down, false, false);
+  function convertToAssets(uint256 shares) public view override returns (uint256) {
+    (uint256 assets, ) = _convertToAssets(shares, Math.Rounding.Down, false, false);
+    return assets;
   }
 
   /** @dev See {IERC4626-maxDeposit}. */
   function maxDeposit(address _receiver) public view virtual override returns (uint256 maxAvailableDeposit) {
-    (maxAvailableDeposit, ) = _maxDeposit(_receiver);
+    (maxAvailableDeposit, , ) = _maxDeposit(_receiver);
   }
 
   /** @dev See {IERC4626-maxMint}. */
   function maxMint(address _receiver) public view virtual override returns (uint256 maxAvailableMint) {
-    (maxAvailableMint, ) = _maxMint(_receiver);
+    (maxAvailableMint, , ) = _maxMint(_receiver);
   }
 
   /* ========== Internal methods ========== */
 
   /** @dev See {IERC4626-maxMint}. */
-  function _maxMint(address _receiver) internal view returns (uint256, uint256) {
-    (uint256 maxAvailableDeposit, uint256 vaultTotalAssets) = _maxDeposit(_receiver);
+  function _maxMint(address _receiver) internal view returns (uint256, uint256, uint256) {
+    (uint256 maxAvailableDeposit, uint256 vaultTotalAssets, uint256 newUVRate) = _maxDeposit(_receiver);
     uint256 maxAvailableMint = _convertToShares(maxAvailableDeposit, Math.Rounding.Down, vaultTotalAssets);
 
-    return (maxAvailableMint, vaultTotalAssets);
+    return (maxAvailableMint, vaultTotalAssets, newUVRate);
   }
 
   /**
@@ -105,7 +107,8 @@ abstract contract BaseERC4626 is ERC4626, ERC20Permit {
     bool exact,
     bool accountForFees
   ) internal view returns (uint256 shares) {
-    return _convertToShares(assets, rounding, _totalAssets(exact, accountForFees));
+    (uint256 totalVaultAssets, ) = _totalAssets(exact, accountForFees);
+    return _convertToShares(assets, rounding, totalVaultAssets);
   }
 
   /**
@@ -131,13 +134,17 @@ abstract contract BaseERC4626 is ERC4626, ERC20Permit {
     Math.Rounding rounding,
     bool exact,
     bool accountForFees
-  ) internal view returns (uint256 assets) {
-    return _convertToAssets(shares, rounding, _totalAssets(exact, accountForFees));
+  ) internal view returns (uint256, uint256) {
+    (uint256 totalVaultAssets, uint256 newUVRate) = _totalAssets(exact, accountForFees);
+
+    uint256 assets = _convertToAssets(shares, rounding, totalVaultAssets);
+
+    return (assets, newUVRate);
   }
 
   /** @dev See {IERC4626-maxDeposit}. */
-  function _maxDeposit(address) internal view virtual returns (uint256, uint256);
+  function _maxDeposit(address) internal view virtual returns (uint256, uint256, uint256);
 
   /** @dev See {IERC4626-totalAssets}. */
-  function _totalAssets(bool _exact, bool accountForFees) internal view virtual returns (uint256);
+  function _totalAssets(bool _exact, bool accountForFees) internal view virtual returns (uint256, uint256);
 }
