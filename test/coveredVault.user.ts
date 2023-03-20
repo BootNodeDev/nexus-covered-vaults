@@ -496,7 +496,7 @@ describe("CoveredVault", function () {
 
       await expect(
         vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address),
-      ).to.be.revertedWithCustomError(vault, "BaseERC4626__DepositMoreThanMax");
+      ).to.be.revertedWithCustomError(vault, "CoveredVault__DepositMoreThanMax");
     });
   });
 
@@ -690,7 +690,7 @@ describe("CoveredVault", function () {
 
       await expect(
         vault.connect(user1)["mint(uint256,address)"](mintShares, user1.address),
-      ).to.be.revertedWithCustomError(vault, "BaseERC4626__MintMoreThanMax");
+      ).to.be.revertedWithCustomError(vault, "CoveredVault__MintMoreThanMax");
     });
   });
 
