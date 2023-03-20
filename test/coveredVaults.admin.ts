@@ -407,6 +407,59 @@ describe("CoveredVault", function () {
     });
   });
 
+  describe("setUnderlyingVaultRateThreshold", function () {
+    it("Should allow only admin to update underlyingVaultRateThreshold", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const adminRole = await vault.DEFAULT_ADMIN_ROLE();
+      const newValue = 2000;
+
+      expect(await vault.uvRateThreshold()).to.not.equal(newValue);
+
+      // Try with regular user
+      await expect(vault.connect(user1).setUnderlyingVaultRateThreshold(newValue)).to.be.revertedWith(
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${adminRole}`,
+      );
+
+      // Try with operator role
+      await vault.connect(admin).grantRole(await vault.BOT_ROLE(), user1.address);
+
+      await expect(vault.connect(user1).setUnderlyingVaultRateThreshold(newValue)).to.be.revertedWith(
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${adminRole}`,
+      );
+
+      // Try with admin
+      await vault.connect(admin).setUnderlyingVaultRateThreshold(newValue);
+
+      expect(await vault.uvRateThreshold()).to.equal(newValue);
+    });
+
+    it("reverts if invalid value", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const maxValue = await vault.RATE_THRESHOLD_DENOMINATOR();
+      const newValue = maxValue.add(1);
+
+      await expect(vault.connect(admin).setUnderlyingVaultRateThreshold(newValue)).to.be.revertedWithCustomError(
+        vault,
+        "CoveredVault__RateThresholdOutOfBound",
+      );
+    });
+
+    it("Should emit an event", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const newValue = 100;
+
+      await expect(vault.connect(admin).setUnderlyingVaultRateThreshold(newValue))
+        .to.emit(vault, "RateThresholdUpdated")
+        .withArgs(newValue);
+    });
+  });
+
   describe("setDepositFee", function () {
     it("Should revert if not admin", async function () {
       const { vault } = await loadFixture(deployVaultFixture);
