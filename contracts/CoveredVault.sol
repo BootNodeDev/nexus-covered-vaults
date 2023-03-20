@@ -503,6 +503,35 @@ contract CoveredVault is SafeERC4626, FeeManager {
     emit Withdraw(caller, receiver, owner, assets, shares);
   }
 
+  /**
+   * @dev Update the assets composition based on the accumulated manager fees
+   */
+  function _updateAssets() internal override {
+    uint256 fee = _calculateManagementFee(underlyingVaultShares);
+    underlyingVaultShares -= fee;
+    lastManagementFeesUpdate = block.timestamp;
+
+    if (fee > 0) {
+      _accrueManagementFees(address(underlyingVault), fee);
+    }
+  }
+
+  /**
+   * @dev Validates the new underlying vault exchange rate
+   * @param _newRate the new exchange rate
+   */
+  function _validateUnderlyingVaultExchangeRate(uint256 _newRate) internal {
+    if (latestUvRate != 0 && _newRate < latestUvRate) {
+      if (_newRate < latestUvRate) {
+        uint256 minNewRate = latestUvRate - (latestUvRate * uvRateThreshold) / RATE_THRESHOLD_DENOMINATOR;
+
+        if (_newRate < minNewRate) revert CoveredVault__UnderlyingVaultBadRate();
+      }
+
+      latestUvRate = _newRate;
+    }
+  }
+
   /** @dev See {IERC4626-maxDeposit}. */
   function _maxDeposit(address) internal view returns (uint256, uint256, uint256) {
     (uint256 assets, uint256 newUVRate) = _totalAssets(false, true);
@@ -540,41 +569,12 @@ contract CoveredVault is SafeERC4626, FeeManager {
   }
 
   /**
-   * @dev Validates the new underlying vault exchange rate
-   * @param _newRate the new exchange rate
-   */
-  function _validateUnderlyingVaultExchangeRate(uint256 _newRate) internal {
-    if (latestUvRate != 0 && _newRate < latestUvRate) {
-      if (_newRate < latestUvRate) {
-        uint256 minNewRate = latestUvRate - (latestUvRate * uvRateThreshold) / RATE_THRESHOLD_DENOMINATOR;
-
-        if (_newRate < minNewRate) revert CoveredVault__UnderlyingVaultBadRate();
-      }
-
-      latestUvRate = _newRate;
-    }
-  }
-
-  /**
    * @dev Calculates the amount of assets that are represented by the shares
    * @param _shares amount of shares
    * @param _exact whether the exact redeemable amount should be calculated or not
    */
   function _convertUnderlyingVaultShares(uint256 _shares, bool _exact) internal view returns (uint256) {
     return _exact == true ? underlyingVault.previewRedeem(_shares) : underlyingVault.convertToAssets(_shares);
-  }
-
-  /**
-   * @dev Update the assets composition based on the accumulated manager fees
-   */
-  function _updateAssets() internal override {
-    uint256 fee = _calculateManagementFee(underlyingVaultShares);
-    underlyingVaultShares -= fee;
-    lastManagementFeesUpdate = block.timestamp;
-
-    if (fee > 0) {
-      _accrueManagementFees(address(underlyingVault), fee);
-    }
   }
 
   /** @dev See {IERC4626-maxMint}. */
