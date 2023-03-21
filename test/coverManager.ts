@@ -277,10 +277,11 @@ describe("CoverManager", function () {
         { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
       ];
 
+      const payoutAmount = parseEther("1");
       await cover.setProducts(products);
       await yieldTokenIncidents
         .connect(owner)
-        .setPayoutAmount(parseEther("1"), underlyingVault.address, underlyingAsset.address);
+        .setPayoutAmount(payoutAmount, underlyingVault.address, underlyingAsset.address);
 
       // coverNFT 1
       await coverManager.connect(owner).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
@@ -294,11 +295,18 @@ describe("CoverManager", function () {
       await underlyingVault.approve(coverManager.address, buyCoverParams.amount);
       await underlyingAsset.mint(yieldTokenIncidents.address, ethers.utils.parseEther("1000"));
 
-      const callerBalanceBefore = await underlyingVault.balanceOf(user1.address);
-      await expect(coverManager.connect(user1).redeemCover(1, 1, 0, buyCoverParams.amount, user1.address, []));
-      const callerBalanceAfter = await underlyingVault.balanceOf(user1.address);
+      console.log("TEST underlyingVault", underlyingVault.address);
+      console.log("TEST underlyingAsset", underlyingAsset.address);
+      const callerUVBalanceBefore = await underlyingVault.balanceOf(user1.address);
+      const callerAssetBalanceBefore = await underlyingAsset.balanceOf(user1.address);
 
-      expect(callerBalanceAfter).to.be.not.eq(callerBalanceBefore);
+      await coverManager.connect(user1).redeemCover(1, 1, 0, buyCoverParams.amount, user1.address, []);
+
+      const callerUVBalanceAfter = await underlyingVault.balanceOf(user1.address);
+      const callerAssetBalanceAfter = await underlyingAsset.balanceOf(user1.address);
+
+      expect(callerUVBalanceAfter).to.eq(callerUVBalanceBefore.sub(buyCoverParams.amount));
+      expect(callerAssetBalanceAfter).to.eq(callerAssetBalanceBefore.add(payoutAmount));
     });
 
     it("Should revert if user balance < depeggedTokens", async () => {
