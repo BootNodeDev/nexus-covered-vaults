@@ -1,7 +1,7 @@
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { deployCoverManager } from "./utils/fixtures";
+import { deployVaultFixture } from "./utils/fixtures";
 import { setNextBlockBaseFeePerGas } from "@nomicfoundation/hardhat-network-helpers";
 import { parseEther } from "ethers/lib/utils";
 
@@ -46,7 +46,7 @@ const productParam = {
 describe("CoverManager", function () {
   describe("Deployment", function () {
     it("Should correctly set params", async function () {
-      const { cover, coverManager, yieldTokenIncidents } = await loadFixture(deployCoverManager);
+      const { cover, coverManager, yieldTokenIncidents } = await loadFixture(deployVaultFixture);
 
       expect(await coverManager.cover()).to.equal(cover.address);
       expect(await coverManager.yieldTokenIncident()).to.equal(yieldTokenIncidents.address);
@@ -55,16 +55,16 @@ describe("CoverManager", function () {
 
   describe("Access Control", function () {
     it("Should give owner rights to deployer", async function () {
-      const { coverManager } = await loadFixture(deployCoverManager);
+      const { coverManager } = await loadFixture(deployVaultFixture);
 
-      const [, , , , owner] = await ethers.getSigners();
+      const [, , , owner] = await ethers.getSigners();
 
       expect(await coverManager.owner()).to.equals(owner.address);
     });
 
     it("Should revert if addToAllowList is called by anybody but owner", async function () {
-      const { coverManager } = await loadFixture(deployCoverManager);
-      const [user1, user2, , , owner] = await ethers.getSigners();
+      const { coverManager } = await loadFixture(deployVaultFixture);
+      const [user1, user2, , owner] = await ethers.getSigners();
 
       await expect(coverManager.connect(user1).addToAllowList(user2.address)).to.be.revertedWith(
         "Ownable: caller is not the owner",
@@ -74,8 +74,8 @@ describe("CoverManager", function () {
     });
 
     it("Should revert if removeFromAllowList is called by anybody but owner", async function () {
-      const { coverManager } = await loadFixture(deployCoverManager);
-      const [user1, user2, , , owner] = await ethers.getSigners();
+      const { coverManager } = await loadFixture(deployVaultFixture);
+      const [user1, user2, , owner] = await ethers.getSigners();
 
       await expect(coverManager.connect(user1).removeFromAllowList(user2.address)).to.be.revertedWith(
         "Ownable: caller is not the owner",
@@ -87,8 +87,8 @@ describe("CoverManager", function () {
 
   describe("allowed callers", function () {
     it("Should revert if is already allowed", async function () {
-      const { coverManager } = await loadFixture(deployCoverManager);
-      const [user1, , , , owner] = await ethers.getSigners();
+      const { coverManager } = await loadFixture(deployVaultFixture);
+      const [user1, , , owner] = await ethers.getSigners();
 
       await coverManager.connect(owner).addToAllowList(user1.address);
       await expect(coverManager.connect(owner).addToAllowList(user1.address)).to.be.revertedWithCustomError(
@@ -98,8 +98,8 @@ describe("CoverManager", function () {
     });
 
     it("Should revert if is already disallowed", async function () {
-      const { coverManager } = await loadFixture(deployCoverManager);
-      const [user1, , , , owner] = await ethers.getSigners();
+      const { coverManager } = await loadFixture(deployVaultFixture);
+      const [user1, , , owner] = await ethers.getSigners();
 
       await expect(coverManager.connect(owner).removeFromAllowList(user1.address)).to.be.revertedWithCustomError(
         coverManager,
@@ -110,8 +110,8 @@ describe("CoverManager", function () {
 
   describe("Buy Cover", function () {
     it("Should succeed if is called with an ERC20 or ETH", async () => {
-      const { coverManager, underlyingAsset } = await loadFixture(deployCoverManager);
-      const [user1, , , , admin] = await ethers.getSigners();
+      const { coverManager, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
 
       await coverManager.connect(admin).addToAllowList(user1.address);
       await underlyingAsset.mint(admin.address, buyCoverParams.amount);
@@ -132,8 +132,8 @@ describe("CoverManager", function () {
     });
 
     xit("Should return to sender amount not spent in ETH", async () => {
-      const { coverManager, cover } = await loadFixture(deployCoverManager);
-      const [user1, , , , admin] = await ethers.getSigners();
+      const { coverManager, cover } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
 
       await coverManager.connect(admin).addToAllowList(user1.address);
 
@@ -157,8 +157,8 @@ describe("CoverManager", function () {
     });
 
     xit("Should return to sender amount not spent in asset", async () => {
-      const { coverManager, cover, underlyingAsset } = await loadFixture(deployCoverManager);
-      const [user1, , , , admin] = await ethers.getSigners();
+      const { coverManager, cover, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
 
       await coverManager.connect(admin).addToAllowList(user1.address);
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("10000"));
@@ -185,59 +185,77 @@ describe("CoverManager", function () {
 
   describe("redeemCover", function () {
     it("Should revert if caller is not allowed", async () => {
-      const { coverManager, cover, underlyingAsset } = await loadFixture(deployCoverManager);
-      const [user1, , , , admin] = await ethers.getSigners();
+      const { coverManager, cover, underlyingAsset, underlyingVault, yieldTokenIncidents } = await loadFixture(
+        deployVaultFixture,
+      );
+      const [user1, , , owner] = await ethers.getSigners();
+
+      const products = [
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+      ];
+
+      await cover.setProducts(products);
+      await yieldTokenIncidents
+        .connect(owner)
+        .setPayoutAmount(parseEther("1"), underlyingVault.address, underlyingAsset.address);
 
       await expect(
         coverManager.connect(user1).redeemCover(1, 1, 0, 100, user1.address, []),
       ).to.be.revertedWithCustomError(coverManager, "CoverManager_NotAllowed");
 
-      await coverManager.connect(admin).addToAllowList(user1.address);
+      await coverManager.connect(owner).addToAllowList(user1.address);
 
-      const products = [
-        { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
-        { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
-      ];
-
-      await cover.setProducts(products);
-      await coverManager.connect(admin).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
+      await coverManager.connect(owner).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
       await coverManager
         .connect(user1)
         .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc]);
 
       await underlyingAsset.mint(user1.address, parseEther("100"));
-      await underlyingAsset.approve(coverManager.address, parseEther("100"));
+      await underlyingAsset.approve(underlyingVault.address, parseEther("100"));
+      await underlyingVault.deposit(parseEther("100"), user1.address);
+      await underlyingVault.approve(coverManager.address, parseEther("100"));
+      await underlyingAsset.mint(yieldTokenIncidents.address, ethers.utils.parseEther("1000"));
+
       await expect(coverManager.connect(user1).redeemCover(1, 1, 0, 100, user1.address, [])).to.not.be.reverted;
     });
 
     it("Should revert if caller is not the owner of coverNFT", async () => {
-      const { coverManager, cover, underlyingAsset } = await loadFixture(deployCoverManager);
-      const [user1, user2, , , admin] = await ethers.getSigners();
+      const { coverManager, cover, underlyingAsset, underlyingVault, yieldTokenIncidents } = await loadFixture(
+        deployVaultFixture,
+      );
+      const [user1, user2, , owner] = await ethers.getSigners();
 
-      await coverManager.connect(admin).addToAllowList(user1.address);
-      await coverManager.connect(admin).addToAllowList(user2.address);
+      await coverManager.connect(owner).addToAllowList(user1.address);
+      await coverManager.connect(owner).addToAllowList(user2.address);
 
       const products = [
-        { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
-        { ...productParam, product: { ...product, yieldTokenAddress: underlyingAsset.address } },
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
       ];
 
       await cover.setProducts(products);
+      await yieldTokenIncidents
+        .connect(owner)
+        .setPayoutAmount(parseEther("1"), underlyingVault.address, underlyingAsset.address);
 
       // coverNFT 1
-      await coverManager.connect(admin).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
+      await coverManager.connect(owner).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
       await coverManager
         .connect(user1)
         .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc]);
 
       // coverNFT 2
-      await coverManager.connect(admin).depositETHOnBehalf(user2.address, { value: buyCoverParams.amount });
+      await coverManager.connect(owner).depositETHOnBehalf(user2.address, { value: buyCoverParams.amount });
       await coverManager
         .connect(user2)
         .buyCover({ ...buyCoverParams, owner: user2.address, paymentAsset: 0 }, [poolAlloc]);
 
       await underlyingAsset.mint(user1.address, parseEther("100"));
-      await underlyingAsset.approve(coverManager.address, parseEther("100"));
+      await underlyingAsset.approve(underlyingVault.address, parseEther("100"));
+      await underlyingVault.deposit(parseEther("100"), user1.address);
+      await underlyingVault.approve(coverManager.address, parseEther("100"));
+      await underlyingAsset.mint(yieldTokenIncidents.address, ethers.utils.parseEther("1000"));
 
       await expect(
         coverManager.connect(user1).redeemCover(1, 2, 0, 100, user1.address, []),
@@ -246,13 +264,81 @@ describe("CoverManager", function () {
       await expect(coverManager.connect(user1).redeemCover(1, 1, 0, 100, user1.address, [])).to.not.be.reverted;
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    xit("Should transfer depeggedTokens to coverManager", async () => {});
+    it("Should transfer depeggedTokens from the caller", async () => {
+      const { coverManager, cover, underlyingAsset, underlyingVault, yieldTokenIncidents } = await loadFixture(
+        deployVaultFixture,
+      );
+      const [user1, , , owner] = await ethers.getSigners();
 
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    xit("Should revert if user balance < depeggedTokens", async () => {});
+      await coverManager.connect(owner).addToAllowList(user1.address);
 
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    xit("Should return payoutAmount and asset", async () => {});
+      const products = [
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+      ];
+
+      const payoutAmount = parseEther("1");
+      await cover.setProducts(products);
+      await yieldTokenIncidents
+        .connect(owner)
+        .setPayoutAmount(payoutAmount, underlyingVault.address, underlyingAsset.address);
+
+      // coverNFT 1
+      await coverManager.connect(owner).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
+      await coverManager
+        .connect(user1)
+        .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc]);
+
+      await underlyingAsset.mint(user1.address, buyCoverParams.amount);
+      await underlyingAsset.approve(underlyingVault.address, buyCoverParams.amount);
+      await underlyingVault.deposit(buyCoverParams.amount, user1.address);
+      await underlyingVault.approve(coverManager.address, buyCoverParams.amount);
+      await underlyingAsset.mint(yieldTokenIncidents.address, ethers.utils.parseEther("1000"));
+
+      const callerUVBalanceBefore = await underlyingVault.balanceOf(user1.address);
+      const callerAssetBalanceBefore = await underlyingAsset.balanceOf(user1.address);
+
+      await coverManager.connect(user1).redeemCover(1, 1, 0, buyCoverParams.amount, user1.address, []);
+
+      const callerUVBalanceAfter = await underlyingVault.balanceOf(user1.address);
+      const callerAssetBalanceAfter = await underlyingAsset.balanceOf(user1.address);
+
+      expect(callerUVBalanceAfter).to.eq(callerUVBalanceBefore.sub(buyCoverParams.amount));
+      expect(callerAssetBalanceAfter).to.eq(callerAssetBalanceBefore.add(payoutAmount));
+    });
+
+    it("Should revert if user balance < depeggedTokens", async () => {
+      const { coverManager, cover, underlyingAsset, underlyingVault, yieldTokenIncidents } = await loadFixture(
+        deployVaultFixture,
+      );
+      const [user1, , , owner] = await ethers.getSigners();
+
+      await coverManager.connect(owner).addToAllowList(user1.address);
+
+      const products = [
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+      ];
+
+      await cover.setProducts(products);
+      await yieldTokenIncidents
+        .connect(owner)
+        .setPayoutAmount(parseEther("1"), underlyingVault.address, underlyingAsset.address);
+
+      // coverNFT 1
+      await coverManager.connect(owner).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
+      await coverManager
+        .connect(user1)
+        .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc]);
+
+      await underlyingAsset.mint(user1.address, buyCoverParams.amount.div(2));
+      await underlyingAsset.approve(underlyingVault.address, buyCoverParams.amount.div(2));
+      await underlyingVault.deposit(buyCoverParams.amount.div(2), user1.address);
+      await underlyingVault.approve(coverManager.address, buyCoverParams.amount.div(2));
+      await underlyingAsset.mint(yieldTokenIncidents.address, ethers.utils.parseEther("1000"));
+
+      await expect(coverManager.connect(user1).redeemCover(1, 1, 0, buyCoverParams.amount, user1.address, [])).to.be
+        .reverted;
+    });
   });
 });
