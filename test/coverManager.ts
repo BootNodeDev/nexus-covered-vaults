@@ -295,8 +295,6 @@ describe("CoverManager", function () {
       await underlyingVault.approve(coverManager.address, buyCoverParams.amount);
       await underlyingAsset.mint(yieldTokenIncidents.address, ethers.utils.parseEther("1000"));
 
-      console.log("TEST underlyingVault", underlyingVault.address);
-      console.log("TEST underlyingAsset", underlyingAsset.address);
       const callerUVBalanceBefore = await underlyingVault.balanceOf(user1.address);
       const callerAssetBalanceBefore = await underlyingAsset.balanceOf(user1.address);
 
