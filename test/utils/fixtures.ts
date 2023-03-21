@@ -8,6 +8,7 @@ import {
   CoverNFTMock,
   CoverMock,
   CoverManager,
+  CoveredVaultFactory,
 } from "../../typechain-types";
 
 const { parseEther } = ethers.utils;
@@ -41,6 +42,7 @@ async function deployVaultFixtureCreator(depositFee = 0, managementFee = 0) {
   const [, , , admin] = await ethers.getSigners();
 
   let vaultAddress: string = "";
+  const maxAssetsLimit = parseEther("1000000000");
 
   await expect(
     vaultFactory.create(
@@ -48,7 +50,8 @@ async function deployVaultFixtureCreator(depositFee = 0, managementFee = 0) {
       vaultName,
       vaultSymbol,
       admin.address,
-      ethers.constants.MaxUint256,
+      maxAssetsLimit,
+      10000,
       1,
       0,
       coverManager.address,
@@ -69,7 +72,8 @@ async function deployVaultFixtureCreator(depositFee = 0, managementFee = 0) {
 }
 
 export async function deployVaultFactoryFixture() {
-  const vaultFactory = await ethers.deployContract("CoveredVaultFactory");
+  const vaultFactory = (await ethers.deployContract("CoveredVaultFactory")) as CoveredVaultFactory;
+
   return { vaultFactory };
 }
 

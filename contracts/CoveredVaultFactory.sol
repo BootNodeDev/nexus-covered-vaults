@@ -19,6 +19,7 @@ contract CoveredVaultFactory {
    * @param _symbol Symbol of the vault
    * @param _admin address' admin operator
    * @param _maxAssetsLimit New maximum asset amount limit
+   * @param _uvRateThreshold Underlying vault exchange rate update threshold
    * @param _productId productId to cover
    * @param _coverAsset id of nexus cover asset
    * @param _coverManager CoverManager used to interact with Nexus
@@ -31,6 +32,7 @@ contract CoveredVaultFactory {
     string memory _symbol,
     address _admin,
     uint256 _maxAssetsLimit,
+    uint256 _uvRateThreshold,
     uint24 _productId,
     uint8 _coverAsset,
     ICoverManager _coverManager,
@@ -43,6 +45,7 @@ contract CoveredVaultFactory {
       _symbol,
       _admin,
       _maxAssetsLimit,
+      _uvRateThreshold,
       _productId,
       _coverAsset,
       _coverManager,

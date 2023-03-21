@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.17;
 
+import { ERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
+import { ERC4626 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
+import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { BaseERC4626 } from "./BaseERC4626.sol";
 
 /**
  * @title SafeERC4626
  * @dev Implementation of EIP-5143. Extends the EIP-4626 Tokenized Vault standard with functions dedicated to the safe
  * interaction between EOAs and the vault when price is subject to slippage.
  */
-abstract contract SafeERC4626 is BaseERC4626 {
+abstract contract SafeERC4626 is ERC4626, ERC20Permit {
   /* ========== Custom Errors ========== */
 
   error CoveredVault__DepositSlippage();
@@ -23,9 +25,22 @@ abstract contract SafeERC4626 is BaseERC4626 {
    * @param _name Name of the vault
    * @param _symbol Symbol of the vault
    */
-  constructor(IERC20 _asset, string memory _name, string memory _symbol) BaseERC4626(_asset, _name, _symbol) {
+  constructor(
+    IERC20 _asset,
+    string memory _name,
+    string memory _symbol
+  ) ERC4626(_asset) ERC20(_name, _symbol) ERC20Permit(_name) {
     // solhint-disable-previous-line no-empty-blocks
   }
+
+  /* ========== View methods ========== */
+
+  /** @dev See {IERC20Metadata-decimals}. */
+  function decimals() public view override(ERC4626, ERC20) returns (uint8) {
+    return super.decimals();
+  }
+
+  /* ========== User methods ========== */
 
   /**
    * @dev Overloaded version of ERC-4626’s deposit. Reverts if depositing _assets mints less than _minShares shares

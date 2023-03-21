@@ -18,6 +18,7 @@ describe("CoveredVaultFactory", function () {
       const managementFee = 0.5 * 1e4; // 5%
       const productId = 1;
       const coverAsset = 2;
+      const uvRateThreshold = 2000; // 20%
 
       // deploy new vault
       await expect(
@@ -27,6 +28,7 @@ describe("CoveredVaultFactory", function () {
           vaultSymbol,
           admin.address,
           ethers.constants.MaxUint256,
+          uvRateThreshold,
           productId,
           coverAsset,
           ethers.constants.AddressZero,
@@ -52,6 +54,7 @@ describe("CoveredVaultFactory", function () {
       expect(await vault.managementFee()).to.equal(managementFee);
       expect(await vault.productId()).to.equal(productId);
       expect(await vault.coverAsset()).to.equal(coverAsset);
+      expect(await vault.uvRateThreshold()).to.equal(uvRateThreshold);
 
       // erc4626 properties
       expect(await vault.asset()).to.equal(underlyingAsset.address);

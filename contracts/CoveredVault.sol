@@ -17,13 +17,32 @@ import { SafeERC4626 } from "./vault/SafeERC4626.sol";
  */
 contract CoveredVault is SafeERC4626, FeeManager {
   using SafeERC20 for IERC20;
+  using Math for uint256;
+
+  /**
+   * @dev Rate threshold denominator 100% with two decimals
+   */
+  uint256 public constant RATE_THRESHOLD_DENOMINATOR = 100_00;
+
+  /**
+   * @dev Precision for the latest underlying vault exchange rate
+   */
+  uint256 public constant RATE_UNIT = 1 ether;
+
+  /**
+   * @dev Percentage rate threshold of an update in the underlying vault exchange rate
+   */
+  uint256 public uvRateThreshold;
+
+  /**
+   * @dev Tracks the latest underlying vault exchange rate with RATE_UNIT precision
+   */
+  uint256 public latestUvRate;
 
   /**
    * @dev CoverId assigned on buyCover
    */
   uint256 public coverId;
-
-  /** @dev CoverId assigned on buyCover */
 
   /**
    * @dev Address of the underlying vault
@@ -79,14 +98,23 @@ contract CoveredVault is SafeERC4626, FeeManager {
    */
   event MaxAssetsLimitUpdated(uint256 newLimit);
 
+  /**
+   * @dev Emitted when the underlying vault rate threshold is updated
+   */
+  event RateThresholdUpdated(uint256 newRate);
+
   /* ========== Custom Errors ========== */
 
+  error CoveredVault__DepositMoreThanMax();
+  error CoveredVault__MintMoreThanMax();
   error CoveredVault__WithdrawMoreThanMax();
   error CoveredVault__RedeemMoreThanMax();
   error CoveredVault__SendingETHFailed();
   error CoveredVault__InvalidWithdrawAddress();
   error CoveredVault__InvalidBuyCoverAmount();
   error CoveredVault__InvestExceedsCoverAmount();
+  error CoveredVault__UnderlyingVaultBadRate();
+  error CoveredVault__RateThresholdOutOfBound();
 
   /* ========== Constructor ========== */
 
@@ -97,6 +125,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
    * @param _symbol Symbol of the vault
    * @param _admin address of admin operator
    * @param _maxAssetsLimit New maximum asset amount limit
+   * @param _uvRateThreshold Underlying vault exchange rate update threshold
    * @param _productId id of covered product
    * @param _coverAsset id of nexus cover asset
    * @param _coverManager address of cover manager contract
@@ -109,6 +138,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
     string memory _symbol,
     address _admin,
     uint256 _maxAssetsLimit,
+    uint256 _uvRateThreshold,
     uint24 _productId,
     uint8 _coverAsset,
     ICoverManager _coverManager,
@@ -117,17 +147,86 @@ contract CoveredVault is SafeERC4626, FeeManager {
   ) SafeERC4626(IERC20(_underlyingVault.asset()), _name, _symbol) FeeManager(_admin, _depositFee, _managementFee) {
     underlyingVault = _underlyingVault;
     maxAssetsLimit = _maxAssetsLimit;
+    uvRateThreshold = _uvRateThreshold;
     productId = _productId;
     coverAsset = _coverAsset;
     coverManager = _coverManager;
+
+    emit RateThresholdUpdated(_uvRateThreshold);
+  }
+
+  /* ========== View methods ========== */
+
+  /** @dev See {IERC4626-totalAssets}. */
+  function totalAssets() public view override returns (uint256) {
+    (uint256 totalVaultAssets, ) = _totalAssets(true, true);
+    return totalVaultAssets;
+  }
+
+  /** @dev See {IERC4626-convertToShares}. */
+  function convertToShares(uint256 assets) public view override returns (uint256 shares) {
+    return _convertToShares(assets, Math.Rounding.Down, false, false);
+  }
+
+  /** @dev See {IERC4626-convertToAssets}. */
+  function convertToAssets(uint256 shares) public view override returns (uint256) {
+    (uint256 assets, ) = _convertToAssets(shares, Math.Rounding.Down, false, false);
+    return assets;
+  }
+
+  /** @dev See {IERC4626-maxDeposit}. */
+  function maxDeposit(address _receiver) public view virtual override returns (uint256 maxAvailableDeposit) {
+    (maxAvailableDeposit, , ) = _maxDeposit(_receiver);
+  }
+
+  /** @dev See {IERC4626-maxMint}. */
+  function maxMint(address _receiver) public view virtual override returns (uint256 maxAvailableMint) {
+    (maxAvailableMint, , ) = _maxMint(_receiver);
+  }
+
+  /** @dev See {IERC4626-previewDeposit}. */
+  function previewDeposit(uint256 assets) public view override returns (uint256) {
+    uint256 fee = _calculateDepositFee(assets);
+
+    return _convertToShares(assets - fee, Math.Rounding.Down, false, true);
+  }
+
+  /** @dev See {IERC4626-previewMint}. */
+  function previewMint(uint256 shares) public view override returns (uint256) {
+    uint256 sharesIncludingFee = _calculateAmountIncludingDepositFee(shares);
+
+    (uint256 assets, ) = _convertToAssets(sharesIncludingFee, Math.Rounding.Up, false, true);
+
+    return assets;
+  }
+
+  /** @dev See {IERC4626-maxWithdraw}. */
+  function maxWithdraw(address owner) public view virtual override returns (uint256) {
+    (uint256 assets, ) = _convertToAssets(balanceOf(owner), Math.Rounding.Down, true, true);
+
+    return assets;
+  }
+
+  /** @dev See {IERC4626-previewWithdraw}. */
+  function previewWithdraw(uint256 assets) public view override returns (uint256) {
+    return _convertToShares(assets, Math.Rounding.Up, true, true);
+  }
+
+  /** @dev See {IERC4626-previewRedeem}. */
+  function previewRedeem(uint256 shares) public view override returns (uint256) {
+    (uint256 assets, ) = _convertToAssets(shares, Math.Rounding.Down, true, true);
+
+    return assets;
   }
 
   /* ========== User methods ========== */
 
   /** @dev See {IERC4626-deposit}. */
   function deposit(uint256 _assets, address _receiver) public override whenNotPaused returns (uint256) {
-    (uint256 maxAvailableDeposit, uint256 vaultTotalAssets) = _maxDeposit(_receiver);
-    if (_assets > maxAvailableDeposit) revert BaseERC4626__DepositMoreThanMax();
+    (uint256 maxAvailableDeposit, uint256 vaultTotalAssets, uint256 newUVRate) = _maxDeposit(_receiver);
+    if (_assets > maxAvailableDeposit) revert CoveredVault__DepositMoreThanMax();
+
+    _validateUnderlyingVaultExchangeRate(newUVRate);
 
     _updateAssets();
 
@@ -146,18 +245,20 @@ contract CoveredVault is SafeERC4626, FeeManager {
 
   /** @dev See {IERC4626-mint}. */
   function mint(uint256 _shares, address _receiver) public override whenNotPaused returns (uint256) {
-    (uint256 maxAvailableMint, uint256 vaultTotalAssets) = _maxMint(_receiver);
-    if (_shares > maxAvailableMint) revert BaseERC4626__MintMoreThanMax();
+    (uint256 maxAvailableMint, uint256 vaultTotalAssets, uint256 newUVRate) = _maxMint(_receiver);
+    if (_shares > maxAvailableMint) revert CoveredVault__MintMoreThanMax();
+
+    _validateUnderlyingVaultExchangeRate(newUVRate);
 
     _updateAssets();
 
     // Calculate the amount of assets that will be accounted for the vault for the shares
     uint256 newVaultAssets = _convertToAssets(_shares, Math.Rounding.Up, vaultTotalAssets);
     // Calculates the amount of assets the user needs to transfer for the required shares and the fees
-    uint256 totalAssets = _calculateAmountIncludingDepositFee(newVaultAssets);
+    uint256 depositAssets = _calculateAmountIncludingDepositFee(newVaultAssets);
 
-    _deposit(_msgSender(), _receiver, totalAssets, _shares);
-    uint256 fee = totalAssets - newVaultAssets;
+    _deposit(_msgSender(), _receiver, depositAssets, _shares);
+    uint256 fee = depositAssets - newVaultAssets;
 
     idleAssets += newVaultAssets;
 
@@ -174,10 +275,12 @@ contract CoveredVault is SafeERC4626, FeeManager {
   ) public override whenNotPaused returns (uint256) {
     _updateAssets();
 
-    uint256 vaultTotalAssets = _totalAssets(true, false);
+    (uint256 vaultTotalAssets, uint256 newUVRate) = _totalAssets(true, false);
     uint256 userMaxWithdraw = _convertToAssets(balanceOf(_owner), Math.Rounding.Down, vaultTotalAssets);
 
     if (_assets > userMaxWithdraw) revert CoveredVault__WithdrawMoreThanMax();
+
+    _validateUnderlyingVaultExchangeRate(newUVRate);
 
     uint256 shares = _convertToShares(_assets, Math.Rounding.Up, vaultTotalAssets);
     _withdraw(_msgSender(), _receiver, _owner, _assets, shares);
@@ -191,68 +294,16 @@ contract CoveredVault is SafeERC4626, FeeManager {
 
     _updateAssets();
 
-    uint256 assets = _convertToAssets(_shares, Math.Rounding.Down, true, false);
+    (uint256 assets, uint256 newUVRate) = _convertToAssets(_shares, Math.Rounding.Down, true, false);
+
+    _validateUnderlyingVaultExchangeRate(newUVRate);
+
     _withdraw(_msgSender(), _receiver, _owner, assets, _shares);
 
     return assets;
   }
 
-  /** @dev See {IERC4626-previewDeposit}. */
-  function previewDeposit(uint256 assets) public view override returns (uint256) {
-    uint256 fee = _calculateDepositFee(assets);
-
-    return _convertToShares(assets - fee, Math.Rounding.Down, false, true);
-  }
-
-  /** @dev See {IERC4626-previewMint}. */
-  function previewMint(uint256 shares) public view override returns (uint256) {
-    uint256 sharesIncludingFee = _calculateAmountIncludingDepositFee(shares);
-
-    return _convertToAssets(sharesIncludingFee, Math.Rounding.Up, false, true);
-  }
-
-  /** @dev See {IERC4626-previewWithdraw}. */
-  function previewWithdraw(uint256 assets) public view override returns (uint256) {
-    return _convertToShares(assets, Math.Rounding.Up, true, true);
-  }
-
-  /** @dev See {IERC4626-previewRedeem}. */
-  function previewRedeem(uint256 shares) public view override returns (uint256) {
-    return _convertToAssets(shares, Math.Rounding.Down, true, true);
-  }
-
-  /**
-   * @dev Allows using the purchased cover to exchange the depegged tokens for the cover asset
-   * @param incidentId Index of the incident in YieldTokenIncidents
-   * @param segmentId Index of the cover's segment that's eligible for redemption
-   * @param depeggedTokens The amount of depegged tokens to be swapped for the cover asset
-   * @param optionalParams extra params
-   */
-  function redeemCover(
-    uint104 incidentId,
-    uint256 segmentId,
-    uint256 depeggedTokens,
-    bytes calldata optionalParams
-  ) external {
-    address cover = coverManager.cover();
-
-    ICover(cover).coverNFT().approve(address(coverManager), coverId);
-    underlyingVault.approve(address(coverManager), depeggedTokens);
-
-    (uint256 payoutAmount, ) = coverManager.redeemCover(
-      incidentId,
-      uint32(coverId),
-      segmentId,
-      depeggedTokens,
-      payable(address(this)),
-      optionalParams
-    );
-
-    underlyingVaultShares -= depeggedTokens;
-    idleAssets += payoutAmount;
-  }
-
-  /* ========== Admin methods ========== */
+  /* ========== Admin/Operator Cover methods ========== */
 
   /**
    * @dev Purchase cover for the assets.
@@ -303,6 +354,55 @@ contract CoveredVault is SafeERC4626, FeeManager {
   }
 
   /**
+   * @dev Allows using the purchased cover to exchange the depegged tokens for the cover asset
+   * @param incidentId Index of the incident in YieldTokenIncidents
+   * @param segmentId Index of the cover's segment that's eligible for redemption
+   * @param depeggedTokens The amount of depegged tokens to be swapped for the cover asset
+   * @param optionalParams extra params
+   */
+  function redeemCover(
+    uint104 incidentId,
+    uint256 segmentId,
+    uint256 depeggedTokens,
+    bytes calldata optionalParams
+  ) external {
+    address cover = coverManager.cover();
+
+    ICover(cover).coverNFT().approve(address(coverManager), coverId);
+    underlyingVault.approve(address(coverManager), depeggedTokens);
+
+    (uint256 payoutAmount, ) = coverManager.redeemCover(
+      incidentId,
+      uint32(coverId),
+      segmentId,
+      depeggedTokens,
+      payable(address(this)),
+      optionalParams
+    );
+
+    underlyingVaultShares -= depeggedTokens;
+    idleAssets += payoutAmount;
+  }
+
+  /**
+   * @dev Allows to withdraw deposited assets in cover manager
+   * @param _asset asset address to withdraw
+   * @param _amount amount to withdraw
+   * @param _to address to send withdrawn funds
+   */
+  function withdrawCoverManagerAssets(
+    address _asset,
+    uint256 _amount,
+    address _to
+  ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    if (_to == address(this)) revert CoveredVault__InvalidWithdrawAddress();
+
+    coverManager.withdraw(_asset, _amount, _to);
+  }
+
+  /* ========== Admin/Operator Underlying Vault methods ========== */
+
+  /**
    * @dev Invest idle vault assets into the underlying vault. Only operator roles can call this method.
    * @param _amount Amount of assets to invest
    */
@@ -318,6 +418,9 @@ contract CoveredVault is SafeERC4626, FeeManager {
     // deposit assets
     IERC20(asset()).approve(address(underlyingVault), _amount);
     uint256 shares = underlyingVault.deposit(_amount, address(this));
+
+    uint256 newUVRate = _getUnderlyingVaultExchangeRate(_amount, shares);
+    _validateUnderlyingVaultExchangeRate(newUVRate);
 
     // update vault assets accounting
     idleAssets -= _amount;
@@ -348,6 +451,9 @@ contract CoveredVault is SafeERC4626, FeeManager {
     // redeem shares
     uint256 assets = underlyingVault.redeem(redeemedShares, address(this), address(this));
 
+    uint256 newUVRate = _getUnderlyingVaultExchangeRate(assets, redeemedShares);
+    _validateUnderlyingVaultExchangeRate(newUVRate);
+
     // update vault assets accounting
     idleAssets += assets;
     underlyingVaultShares = sharesAfterFees - redeemedShares;
@@ -362,6 +468,8 @@ contract CoveredVault is SafeERC4626, FeeManager {
     emit UnInvested(assets, redeemedShares, msg.sender);
   }
 
+  /* ========== Admin methods ========== */
+
   /**
    * @dev Sets the maximum amount of assets that can be managed by the vault. Used to calculate the available amount
    * for new deposits.
@@ -374,27 +482,23 @@ contract CoveredVault is SafeERC4626, FeeManager {
   }
 
   /**
+   * @dev Sets the new percentage rate threshold
+   * @param _newThreshold new threshold value
+   */
+  function setUnderlyingVaultRateThreshold(uint256 _newThreshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    if (_newThreshold > RATE_THRESHOLD_DENOMINATOR) revert CoveredVault__RateThresholdOutOfBound();
+
+    uvRateThreshold = _newThreshold;
+
+    emit RateThresholdUpdated(_newThreshold);
+  }
+
+  /**
    * @dev Transfers accumulated fees. Only Admin can call this method
    * @param _to receiver of the claimed fees
    */
   function claimFees(address _to) external onlyRole(DEFAULT_ADMIN_ROLE) {
     _claimFees(asset(), address(underlyingVault), _to);
-  }
-
-  /**
-   * @dev Allows to withdraw deposited assets in cover manager
-   * @param _asset asset address to withdraw
-   * @param _amount amount to withdraw
-   * @param _to address to send withdrawn funds
-   */
-  function withdrawCoverManagerAssets(
-    address _asset,
-    uint256 _amount,
-    address _to
-  ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (_to == address(this)) revert CoveredVault__InvalidWithdrawAddress();
-
-    coverManager.withdraw(_asset, _amount, _to);
   }
 
   /* ========== Internal methods ========== */
@@ -434,40 +538,6 @@ contract CoveredVault is SafeERC4626, FeeManager {
     emit Withdraw(caller, receiver, owner, assets, shares);
   }
 
-  /** @dev See {IERC4626-maxDeposit}. */
-  function _maxDeposit(address) internal view override returns (uint256, uint256) {
-    uint256 assets = _totalAssets(false, true);
-    if (assets >= maxAssetsLimit) return (0, assets);
-
-    unchecked {
-      return (maxAssetsLimit - assets, assets);
-    }
-  }
-
-  /** @dev See {IERC4626-totalAssets}. */
-  function _totalAssets(bool _exact, bool accountForFees) internal view override returns (uint256) {
-    uint256 _underlyingVaultShares = underlyingVaultShares;
-
-    if (accountForFees) {
-      uint256 fee = _calculateManagementFee(underlyingVaultShares);
-
-      _underlyingVaultShares -= fee;
-    }
-
-    uint256 investedAssets = _convertUnderlyingVaultShares(_underlyingVaultShares, _exact);
-
-    return investedAssets + idleAssets;
-  }
-
-  /**
-   * @dev Calculates the amount of assets that are represented by the shares
-   * @param _shares amount of shares
-   * @param _exact whether the exact redeemable amount should be calculated or not
-   */
-  function _convertUnderlyingVaultShares(uint256 _shares, bool _exact) internal view returns (uint256) {
-    return _exact == true ? underlyingVault.previewRedeem(_shares) : underlyingVault.convertToAssets(_shares);
-  }
-
   /**
    * @dev Update the assets composition based on the accumulated manager fees
    */
@@ -479,5 +549,139 @@ contract CoveredVault is SafeERC4626, FeeManager {
     if (fee > 0) {
       _accrueManagementFees(address(underlyingVault), fee);
     }
+  }
+
+  /**
+   * @dev Validates the new underlying vault exchange rate
+   * @param _newRate the new exchange rate
+   */
+  function _validateUnderlyingVaultExchangeRate(uint256 _newRate) internal {
+    if (latestUvRate != 0 && _newRate < latestUvRate) {
+      uint256 minNewRate = latestUvRate - (latestUvRate * uvRateThreshold) / RATE_THRESHOLD_DENOMINATOR;
+
+      if (_newRate < minNewRate) revert CoveredVault__UnderlyingVaultBadRate();
+    }
+
+    if (_newRate != latestUvRate) {
+      latestUvRate = _newRate;
+    }
+  }
+
+  /** @dev See {IERC4626-maxDeposit}. */
+  function _maxDeposit(address) internal view returns (uint256, uint256, uint256) {
+    (uint256 assets, uint256 newUVRate) = _totalAssets(false, true);
+    if (assets >= maxAssetsLimit) return (0, assets, newUVRate);
+
+    unchecked {
+      return (maxAssetsLimit - assets, assets, newUVRate);
+    }
+  }
+
+  /** @dev See {IERC4626-totalAssets}. */
+  function _totalAssets(bool _exact, bool accountForFees) internal view returns (uint256, uint256) {
+    uint256 _underlyingVaultShares = underlyingVaultShares;
+
+    if (accountForFees) {
+      uint256 fee = _calculateManagementFee(underlyingVaultShares);
+
+      _underlyingVaultShares -= fee;
+    }
+
+    uint256 investedAssets = _convertUnderlyingVaultShares(_underlyingVaultShares, _exact);
+    uint256 newUVRate = _getUnderlyingVaultExchangeRate(investedAssets, _underlyingVaultShares);
+
+    return (investedAssets + idleAssets, newUVRate);
+  }
+
+  /**
+   * @dev Calculates the exchange rate of the amount of assets that are represented by the shares
+   * @param _assets amount of assets
+   * @param _shares amount of shares
+   * @return the exchange rate in RATE_UNIT precision
+   */
+  function _getUnderlyingVaultExchangeRate(uint256 _assets, uint256 _shares) internal pure returns (uint256) {
+    return _shares > 0 ? (_assets * RATE_UNIT) / _shares : 0;
+  }
+
+  /**
+   * @dev Calculates the amount of assets that are represented by the shares
+   * @param _shares amount of shares
+   * @param _exact whether the exact redeemable amount should be calculated or not
+   */
+  function _convertUnderlyingVaultShares(uint256 _shares, bool _exact) internal view returns (uint256) {
+    return _exact == true ? underlyingVault.previewRedeem(_shares) : underlyingVault.convertToAssets(_shares);
+  }
+
+  /** @dev See {IERC4626-maxMint}. */
+  function _maxMint(address _receiver) internal view returns (uint256, uint256, uint256) {
+    (uint256 maxAvailableDeposit, uint256 vaultTotalAssets, uint256 newUVRate) = _maxDeposit(_receiver);
+    uint256 maxAvailableMint = _convertToShares(maxAvailableDeposit, Math.Rounding.Down, vaultTotalAssets);
+
+    return (maxAvailableMint, vaultTotalAssets, newUVRate);
+  }
+
+  /**
+   * @dev Internal conversion function (from assets to shares) with support for rounding direction.
+   *
+   * Will revert if assets > 0, totalSupply > 0 and totalAssets = 0. That corresponds to a case where any asset
+   * would represent an infinite amount of shares.
+   */
+  function _convertToShares(
+    uint256 assets,
+    Math.Rounding rounding,
+    uint256 calculatedTotalAssets
+  ) internal view returns (uint256 shares) {
+    uint256 supply = totalSupply();
+    return
+      (assets == 0 || supply == 0)
+        ? _initialConvertToShares(assets, rounding)
+        : assets.mulDiv(supply, calculatedTotalAssets, rounding);
+  }
+
+  /**
+   * @dev Internal conversion function (from assets to shares) with support for rounding direction.
+   *
+   * Will revert if assets > 0, totalSupply > 0 and totalAssets = 0. That corresponds to a case where any asset
+   * would represent an infinite amount of shares.
+   */
+  function _convertToShares(
+    uint256 assets,
+    Math.Rounding rounding,
+    bool exact,
+    bool accountForFees
+  ) internal view returns (uint256 shares) {
+    (uint256 totalVaultAssets, ) = _totalAssets(exact, accountForFees);
+    return _convertToShares(assets, rounding, totalVaultAssets);
+  }
+
+  /**
+   * @dev Internal conversion function (from shares to assets) with support for rounding direction.
+   */
+  function _convertToAssets(
+    uint256 shares,
+    Math.Rounding rounding,
+    uint256 calculatedTotalAssets
+  ) internal view returns (uint256 assets) {
+    uint256 supply = totalSupply();
+    return
+      (supply == 0)
+        ? _initialConvertToAssets(shares, rounding)
+        : shares.mulDiv(calculatedTotalAssets, supply, rounding);
+  }
+
+  /**
+   * @dev Internal conversion function (from shares to assets) with support for rounding direction.
+   */
+  function _convertToAssets(
+    uint256 shares,
+    Math.Rounding rounding,
+    bool exact,
+    bool accountForFees
+  ) internal view returns (uint256, uint256) {
+    (uint256 totalVaultAssets, uint256 newUVRate) = _totalAssets(exact, accountForFees);
+
+    uint256 assets = _convertToAssets(shares, rounding, totalVaultAssets);
+
+    return (assets, newUVRate);
   }
 }
