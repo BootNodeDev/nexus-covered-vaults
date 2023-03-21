@@ -264,13 +264,75 @@ describe("CoverManager", function () {
       await expect(coverManager.connect(user1).redeemCover(1, 1, 0, 100, user1.address, [])).to.not.be.reverted;
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    xit("Should transfer depeggedTokens to coverManager", async () => {});
+    it("Should transfer depeggedTokens from the caller", async () => {
+      const { coverManager, cover, underlyingAsset, underlyingVault, yieldTokenIncidents } = await loadFixture(
+        deployVaultFixture,
+      );
+      const [user1, , , owner] = await ethers.getSigners();
 
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    xit("Should revert if user balance < depeggedTokens", async () => {});
+      await coverManager.connect(owner).addToAllowList(user1.address);
 
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    xit("Should return payoutAmount and asset", async () => {});
+      const products = [
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+      ];
+
+      await cover.setProducts(products);
+      await yieldTokenIncidents
+        .connect(owner)
+        .setPayoutAmount(parseEther("1"), underlyingVault.address, underlyingAsset.address);
+
+      // coverNFT 1
+      await coverManager.connect(owner).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
+      await coverManager
+        .connect(user1)
+        .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc]);
+
+      await underlyingAsset.mint(user1.address, buyCoverParams.amount);
+      await underlyingAsset.approve(underlyingVault.address, buyCoverParams.amount);
+      await underlyingVault.deposit(buyCoverParams.amount, user1.address);
+      await underlyingVault.approve(coverManager.address, buyCoverParams.amount);
+      await underlyingAsset.mint(yieldTokenIncidents.address, ethers.utils.parseEther("1000"));
+
+      const callerBalanceBefore = await underlyingVault.balanceOf(user1.address);
+      await expect(coverManager.connect(user1).redeemCover(1, 1, 0, buyCoverParams.amount, user1.address, []));
+      const callerBalanceAfter = await underlyingVault.balanceOf(user1.address);
+
+      expect(callerBalanceAfter).to.be.not.eq(callerBalanceBefore);
+    });
+
+    it("Should revert if user balance < depeggedTokens", async () => {
+      const { coverManager, cover, underlyingAsset, underlyingVault, yieldTokenIncidents } = await loadFixture(
+        deployVaultFixture,
+      );
+      const [user1, , , owner] = await ethers.getSigners();
+
+      await coverManager.connect(owner).addToAllowList(user1.address);
+
+      const products = [
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+      ];
+
+      await cover.setProducts(products);
+      await yieldTokenIncidents
+        .connect(owner)
+        .setPayoutAmount(parseEther("1"), underlyingVault.address, underlyingAsset.address);
+
+      // coverNFT 1
+      await coverManager.connect(owner).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
+      await coverManager
+        .connect(user1)
+        .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc]);
+
+      await underlyingAsset.mint(user1.address, buyCoverParams.amount.div(2));
+      await underlyingAsset.approve(underlyingVault.address, buyCoverParams.amount.div(2));
+      await underlyingVault.deposit(buyCoverParams.amount.div(2), user1.address);
+      await underlyingVault.approve(coverManager.address, buyCoverParams.amount.div(2));
+      await underlyingAsset.mint(yieldTokenIncidents.address, ethers.utils.parseEther("1000"));
+
+      await expect(coverManager.connect(user1).redeemCover(1, 1, 0, buyCoverParams.amount, user1.address, [])).to.be
+        .reverted;
+    });
   });
 });
