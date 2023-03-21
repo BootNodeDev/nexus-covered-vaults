@@ -303,38 +303,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
     return assets;
   }
 
-  /**
-   * @dev Allows using the purchased cover to exchange the depegged tokens for the cover asset
-   * @param incidentId Index of the incident in YieldTokenIncidents
-   * @param segmentId Index of the cover's segment that's eligible for redemption
-   * @param depeggedTokens The amount of depegged tokens to be swapped for the cover asset
-   * @param optionalParams extra params
-   */
-  function redeemCover(
-    uint104 incidentId,
-    uint256 segmentId,
-    uint256 depeggedTokens,
-    bytes calldata optionalParams
-  ) external {
-    address cover = coverManager.cover();
-
-    ICover(cover).coverNFT().approve(address(coverManager), coverId);
-    underlyingVault.approve(address(coverManager), depeggedTokens);
-
-    (uint256 payoutAmount, ) = coverManager.redeemCover(
-      incidentId,
-      uint32(coverId),
-      segmentId,
-      depeggedTokens,
-      payable(address(this)),
-      optionalParams
-    );
-
-    underlyingVaultShares -= depeggedTokens;
-    idleAssets += payoutAmount;
-  }
-
-  /* ========== Admin methods ========== */
+  /* ========== Admin/Operator Cover methods ========== */
 
   /**
    * @dev Purchase cover for the assets.
@@ -383,6 +352,55 @@ contract CoveredVault is SafeERC4626, FeeManager {
       coverId = newCoverId;
     }
   }
+
+  /**
+   * @dev Allows using the purchased cover to exchange the depegged tokens for the cover asset
+   * @param incidentId Index of the incident in YieldTokenIncidents
+   * @param segmentId Index of the cover's segment that's eligible for redemption
+   * @param depeggedTokens The amount of depegged tokens to be swapped for the cover asset
+   * @param optionalParams extra params
+   */
+  function redeemCover(
+    uint104 incidentId,
+    uint256 segmentId,
+    uint256 depeggedTokens,
+    bytes calldata optionalParams
+  ) external {
+    address cover = coverManager.cover();
+
+    ICover(cover).coverNFT().approve(address(coverManager), coverId);
+    underlyingVault.approve(address(coverManager), depeggedTokens);
+
+    (uint256 payoutAmount, ) = coverManager.redeemCover(
+      incidentId,
+      uint32(coverId),
+      segmentId,
+      depeggedTokens,
+      payable(address(this)),
+      optionalParams
+    );
+
+    underlyingVaultShares -= depeggedTokens;
+    idleAssets += payoutAmount;
+  }
+
+  /**
+   * @dev Allows to withdraw deposited assets in cover manager
+   * @param _asset asset address to withdraw
+   * @param _amount amount to withdraw
+   * @param _to address to send withdrawn funds
+   */
+  function withdrawCoverManagerAssets(
+    address _asset,
+    uint256 _amount,
+    address _to
+  ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    if (_to == address(this)) revert CoveredVault__InvalidWithdrawAddress();
+
+    coverManager.withdraw(_asset, _amount, _to);
+  }
+
+  /* ========== Admin/Operator Underlying Vault methods ========== */
 
   /**
    * @dev Invest idle vault assets into the underlying vault. Only operator roles can call this method.
@@ -450,6 +468,8 @@ contract CoveredVault is SafeERC4626, FeeManager {
     emit UnInvested(assets, redeemedShares, msg.sender);
   }
 
+  /* ========== Admin methods ========== */
+
   /**
    * @dev Sets the maximum amount of assets that can be managed by the vault. Used to calculate the available amount
    * for new deposits.
@@ -479,22 +499,6 @@ contract CoveredVault is SafeERC4626, FeeManager {
    */
   function claimFees(address _to) external onlyRole(DEFAULT_ADMIN_ROLE) {
     _claimFees(asset(), address(underlyingVault), _to);
-  }
-
-  /**
-   * @dev Allows to withdraw deposited assets in cover manager
-   * @param _asset asset address to withdraw
-   * @param _amount amount to withdraw
-   * @param _to address to send withdrawn funds
-   */
-  function withdrawCoverManagerAssets(
-    address _asset,
-    uint256 _amount,
-    address _to
-  ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (_to == address(this)) revert CoveredVault__InvalidWithdrawAddress();
-
-    coverManager.withdraw(_asset, _amount, _to);
   }
 
   /* ========== Internal methods ========== */
