@@ -750,5 +750,23 @@ describe("CoveredVault", function () {
       await expect(vault.connect(admin).withdrawCoverManagerAssets(underlyingAsset.address, amount, user1.address)).to
         .not.be.reverted;
     });
+
+    it("Should revert if `to` goes back to vault again", async function () {
+      const { vault, coverManager, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const amount = ethers.utils.parseEther("100");
+
+      // deposit underlyingAsset
+      await underlyingAsset.mint(user1.address, amount);
+      await underlyingAsset.connect(user1).approve(coverManager.address, amount);
+      await coverManager.connect(admin).addToAllowList(vault.address);
+
+      await coverManager.connect(user1).depositOnBehalf(underlyingAsset.address, amount, vault.address);
+
+      await expect(
+        vault.connect(admin).withdrawCoverManagerAssets(underlyingAsset.address, amount, vault.address),
+      ).to.be.revertedWithCustomError(vault, "CoveredVault__InvalidWithdrawAddress");
+    });
   });
 });
