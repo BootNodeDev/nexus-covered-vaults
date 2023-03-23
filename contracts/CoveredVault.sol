@@ -145,6 +145,8 @@ contract CoveredVault is SafeERC4626, FeeManager {
     uint256 _depositFee,
     uint256 _managementFee
   ) SafeERC4626(IERC20(_underlyingVault.asset()), _name, _symbol) FeeManager(_admin, _depositFee, _managementFee) {
+    if (_uvRateThreshold > RATE_THRESHOLD_DENOMINATOR) revert CoveredVault__RateThresholdOutOfBound();
+
     underlyingVault = _underlyingVault;
     maxAssetsLimit = _maxAssetsLimit;
     uvRateThreshold = _uvRateThreshold;
