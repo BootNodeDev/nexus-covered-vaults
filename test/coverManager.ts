@@ -181,6 +181,48 @@ describe("CoverManager", function () {
 
       expect(balanceAfter).to.be.eq(balanceBefore.sub(premiumAmount));
     });
+
+    it("Should revert if not enough funds to pay premium", async () => {
+      const { coverManager, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      await coverManager.connect(admin).addToAllowList(user1.address);
+      await underlyingAsset.mint(user1.address, buyCoverParams.maxPremiumInAsset.div(2));
+      await underlyingAsset.connect(user1).approve(coverManager.address, buyCoverParams.maxPremiumInAsset.div(2));
+
+      await setNextBlockBaseFeePerGas(0);
+      await expect(
+        coverManager
+          .connect(user1)
+          .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 1 }, [poolAlloc], {
+            gasPrice: 0,
+          }),
+      ).to.be.revertedWithCustomError(coverManager, "CoverManager_InsufficientFunds");
+    });
+
+    it("Should substract used funds", async () => {
+      const { coverManager, underlyingAsset, cover } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      await coverManager.connect(admin).addToAllowList(user1.address);
+      await underlyingAsset.mint(user1.address, ethers.utils.parseEther("1000"));
+      await underlyingAsset.connect(user1).approve(coverManager.address, ethers.utils.parseEther("1000"));
+      await coverManager.connect(user1).depositOnBehalf(underlyingAsset.address, buyCoverParams.amount, user1.address);
+
+      await setNextBlockBaseFeePerGas(0);
+      const premium = await cover.premium();
+      const PREMIUM_DENOMINATOR = await cover.PREMIUM_DENOMINATOR();
+      const amountToPay = buyCoverParams.amount.mul(premium).div(PREMIUM_DENOMINATOR);
+      const fundsBefore = await coverManager.funds(underlyingAsset.address, user1.address);
+      await coverManager
+        .connect(user1)
+        .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 1 }, [poolAlloc], {
+          gasPrice: 0,
+        });
+      const fundsAfter = await coverManager.funds(underlyingAsset.address, user1.address);
+
+      expect(fundsAfter).to.be.eq(fundsBefore.sub(amountToPay));
+    });
   });
 
   describe("redeemCover", function () {
@@ -340,5 +382,75 @@ describe("CoverManager", function () {
       await expect(coverManager.connect(user1).redeemCover(1, 1, 0, buyCoverParams.amount, user1.address, [])).to.be
         .reverted;
     });
+  });
+
+  describe("depositOnBehalf", function () {
+    it("Should revert if deposit is not for address != sender and it is not allowed", async () => {
+      const { coverManager, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, user2, , admin] = await ethers.getSigners();
+
+      await underlyingAsset.mint(user1.address, ethers.utils.parseEther("1000"));
+      await underlyingAsset.mint(user2.address, ethers.utils.parseEther("1000"));
+
+      await underlyingAsset.connect(user1).approve(coverManager.address, ethers.utils.parseEther("1000"));
+      await underlyingAsset.connect(user2).approve(coverManager.address, ethers.utils.parseEther("1000"));
+
+      await expect(
+        coverManager.connect(user2).depositOnBehalf(underlyingAsset.address, buyCoverParams.amount, user1.address),
+      ).to.be.revertedWithCustomError(coverManager, "CoverManager_DepositNotAllowed");
+
+      await coverManager.connect(admin).addToAllowList(user1.address);
+      await expect(
+        coverManager.connect(user2).depositOnBehalf(underlyingAsset.address, buyCoverParams.amount, user1.address),
+      ).to.not.be.reverted;
+
+      // Not allowed but to == msg.sender
+      await expect(
+        coverManager.connect(user2).depositOnBehalf(underlyingAsset.address, buyCoverParams.amount, user2.address),
+      ).to.not.be.reverted;
+    });
+
+    it("Should transfer asset amount and increase funds in the same quantity", async () => {
+      const { coverManager, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1] = await ethers.getSigners();
+
+      await underlyingAsset.mint(user1.address, ethers.utils.parseEther("1000"));
+      await underlyingAsset.connect(user1).approve(coverManager.address, ethers.utils.parseEther("1000"));
+
+      const fundsBefore = await coverManager.funds(underlyingAsset.address, user1.address);
+      const cmBalanceBefore = await underlyingAsset.balanceOf(coverManager.address);
+      const user1BalanceBefore = await underlyingAsset.balanceOf(user1.address);
+
+      await coverManager.connect(user1).depositOnBehalf(underlyingAsset.address, buyCoverParams.amount, user1.address);
+
+      const fundsAfter = await coverManager.funds(underlyingAsset.address, user1.address);
+      const cmBalanceAfter = await underlyingAsset.balanceOf(coverManager.address);
+      const user1BalanceAfter = await underlyingAsset.balanceOf(user1.address);
+
+      expect(fundsAfter).to.be.eq(fundsBefore.add(buyCoverParams.amount));
+      expect(cmBalanceAfter).to.be.eq(cmBalanceBefore.add(buyCoverParams.amount));
+      expect(user1BalanceAfter).to.be.eq(user1BalanceBefore.sub(buyCoverParams.amount));
+    });
+
+    it("Should emit Deposit event", async () => {
+      const { coverManager, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1] = await ethers.getSigners();
+
+      await underlyingAsset.mint(user1.address, ethers.utils.parseEther("1000"));
+      await underlyingAsset.connect(user1).approve(coverManager.address, ethers.utils.parseEther("1000"));
+
+      await expect(
+        coverManager.connect(user1).depositOnBehalf(underlyingAsset.address, buyCoverParams.amount, user1.address),
+      )
+        .to.emit(coverManager, "Deposit")
+        .withArgs(user1.address, user1.address, underlyingAsset.address, buyCoverParams.amount);
+    });
+  });
+
+  describe("depositETHOnBehalf", function () {
+    // no-op
+  });
+  describe("withdraw", function () {
+    // no-op
   });
 });
