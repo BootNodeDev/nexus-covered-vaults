@@ -13,7 +13,18 @@
     "lint:ts": "eslint --config ./.eslintrc.yaml --ignore-path ./.eslintignore --ext .js,.ts .",
     "prettier": "prettier --config .prettierrc --write \"**/*.{js,json,md,sol,ts}\"",
     "prettier:check": "prettier --config .prettierrc --list-different \"**/*.{js,sol,ts}\"",
-    "size-contracts": "hardhat size-contracts"
+    "size-contracts": "hardhat size-contracts",
+    "deploy:mocks:local": "hardhat run scripts/deployMocks.ts --network local",
+    "deploy:factory:local": "hardhat run scripts/deployCoveredVaultFactory.ts --network local",
+    "deploy:cover-manager:local": "hardhat run scripts/deployCoverManager.ts --network local",
+    "deploy:covered-vault:local": "hardhat run scripts/deployCoveredVault.ts --network local",
+    "deploy:mocks:goerli": "hardhat run scripts/deployMocks.ts --network goerli",
+    "deploy:factory:goerli": "hardhat run scripts/deployCoveredVaultFactory.ts --network goerli",
+    "deploy:cover-manager:goerli": "hardhat run scripts/deployCoverManager.ts --network goerli",
+    "deploy:covered-vault:goerli": "hardhat run scripts/deployCoveredVault.ts --network goerli",
+    "deploy:factory:mainnet": "hardhat run scripts/deployCoveredVaultFactory.ts --network mainnet",
+    "deploy:cover-manager:mainnet": "hardhat run scripts/deployCoverManager.ts --network mainnet",
+    "deploy:covered-vault:mainnet": "hardhat run scripts/deployCoveredVault.ts --network mainnet"
   },
   "dependencies": {
     "@openzeppelin/contracts": "4.8.0-rc.0"
@@ -25,7 +36,7 @@
     "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
     "@nomicfoundation/hardhat-toolbox": "^2.0.0",
     "@nomiclabs/hardhat-ethers": "^2.0.0",
-    "@nomiclabs/hardhat-etherscan": "^3.0.0",
+    "@nomiclabs/hardhat-etherscan": "^3.1.7",
     "@typechain/ethers-v5": "^10.1.0",
     "@typechain/hardhat": "^6.1.2",
     "@types/chai": "^4.2.0",
@@ -34,6 +45,7 @@
     "@typescript-eslint/eslint-plugin": "^5.37.0",
     "@typescript-eslint/parser": "^5.37.0",
     "chai": "^4.2.0",
+    "dotenv": "^16.0.3",
     "eslint": "^8.23.1",
     "eslint-config-prettier": "^8.5.0",
     "eslint-config-standard": "^17.0.0",
