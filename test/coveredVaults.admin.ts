@@ -727,4 +727,28 @@ describe("CoveredVault", function () {
       expect(accumulatedAssetFeesAfter).to.equal(0);
     });
   });
+
+  describe("withdrawCoverManagerAssets", function () {
+    it.only("Should revert if not admin", async function () {
+      const { vault, coverManager, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const amount = ethers.utils.parseEther("100");
+      const adminRole = await vault.DEFAULT_ADMIN_ROLE();
+
+      // deposit underlyingAsset
+      await underlyingAsset.mint(user1.address, amount);
+      await underlyingAsset.connect(user1).approve(coverManager.address, amount);
+
+      await coverManager.connect(user1).depositOnBehalf(underlyingAsset.address, amount, user1.address);
+
+      await expect(
+        vault.connect(user1).withdrawCoverManagerAssets(underlyingAsset.address, amount, user1.address),
+      ).to.be.revertedWith(`AccessControl: account ${user1.address.toLowerCase()} is missing role ${adminRole}`);
+
+      console.log({ admin: admin.address, user1: user1.address });
+      await expect(vault.connect(admin).withdrawCoverManagerAssets(underlyingAsset.address, amount, user1.address)).to
+        .not.be.reverted;
+    });
+  });
 });
