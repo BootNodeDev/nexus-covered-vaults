@@ -111,6 +111,9 @@ abstract contract FeeManager is AccessManager {
    * @param _managementFee Fee for managed assets
    */
   constructor(address _admin, uint256 _depositFee, uint256 _managementFee) AccessManager(_admin) {
+    if (_depositFee > FEE_DENOMINATOR) revert CoveredVault__FeeOutOfBound();
+    if (_managementFee > FEE_DENOMINATOR) revert CoveredVault__FeeOutOfBound();
+
     depositFee = _depositFee;
     managementFee = _managementFee;
 
