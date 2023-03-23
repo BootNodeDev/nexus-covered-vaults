@@ -501,7 +501,7 @@ describe("CoverManager", function () {
     });
   });
 
-  describe.only("withdraw", function () {
+  describe("withdraw", function () {
     it("Should transfer ETH amount back to user and decrease funds in the same quantity", async () => {
       const { coverManager } = await loadFixture(deployVaultFixture);
       const [user1] = await ethers.getSigners();
