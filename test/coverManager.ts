@@ -501,7 +501,84 @@ describe("CoverManager", function () {
     });
   });
 
-  describe("withdraw", function () {
-    // no-op
+  describe.only("withdraw", function () {
+    it("Should transfer ETH amount back to user and decrease funds in the same quantity", async () => {
+      const { coverManager } = await loadFixture(deployVaultFixture);
+      const [user1] = await ethers.getSigners();
+
+      const ETH_ADDRESS = await coverManager.ETH_ADDRESS();
+
+      await setNextBlockBaseFeePerGas(0);
+      await coverManager
+        .connect(user1)
+        .depositETHOnBehalf(user1.address, { value: buyCoverParams.amount, gasPrice: 0 });
+
+      const fundsBefore = await coverManager.funds(ETH_ADDRESS, user1.address);
+      const cmBalanceBefore = await ethers.provider.getBalance(coverManager.address);
+      const user1BalanceBefore = await ethers.provider.getBalance(user1.address);
+
+      await setNextBlockBaseFeePerGas(0);
+      await coverManager.connect(user1).withdraw(ETH_ADDRESS, buyCoverParams.amount, user1.address, { gasPrice: 0 });
+
+      const fundsAfter = await coverManager.funds(ETH_ADDRESS, user1.address);
+      const cmBalanceAfter = await ethers.provider.getBalance(coverManager.address);
+      const user1BalanceAfter = await ethers.provider.getBalance(user1.address);
+
+      expect(fundsAfter).to.be.eq(fundsBefore.sub(buyCoverParams.amount));
+      expect(cmBalanceAfter).to.be.eq(cmBalanceBefore.sub(buyCoverParams.amount));
+      expect(user1BalanceAfter).to.be.eq(user1BalanceBefore.add(buyCoverParams.amount));
+    });
+
+    it("Should transfer asset amount back to user and decrease funds in the same quantity", async () => {
+      const { coverManager, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1] = await ethers.getSigners();
+
+      await underlyingAsset.mint(user1.address, buyCoverParams.amount);
+      await underlyingAsset.connect(user1).approve(coverManager.address, buyCoverParams.amount);
+
+      await coverManager.connect(user1).depositOnBehalf(underlyingAsset.address, buyCoverParams.amount, user1.address);
+
+      const fundsBefore = await coverManager.funds(underlyingAsset.address, user1.address);
+      const cmBalanceBefore = await underlyingAsset.balanceOf(coverManager.address);
+      const user1BalanceBefore = await underlyingAsset.balanceOf(user1.address);
+
+      await coverManager.connect(user1).withdraw(underlyingAsset.address, buyCoverParams.amount, user1.address);
+
+      const fundsAfter = await coverManager.funds(underlyingAsset.address, user1.address);
+      const cmBalanceAfter = await underlyingAsset.balanceOf(coverManager.address);
+      const user1BalanceAfter = await underlyingAsset.balanceOf(user1.address);
+
+      expect(fundsAfter).to.be.eq(fundsBefore.sub(buyCoverParams.amount));
+      expect(cmBalanceAfter).to.be.eq(cmBalanceBefore.sub(buyCoverParams.amount));
+      expect(user1BalanceAfter).to.be.eq(user1BalanceBefore.add(buyCoverParams.amount));
+    });
+
+    it("Should emit Withdraw event", async () => {
+      const { coverManager, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1] = await ethers.getSigners();
+
+      const ETH_ADDRESS = await coverManager.ETH_ADDRESS();
+
+      // deposit underlyingAsset
+      await underlyingAsset.mint(user1.address, ethers.utils.parseEther("1000"));
+      await underlyingAsset.connect(user1).approve(coverManager.address, ethers.utils.parseEther("1000"));
+
+      await coverManager.connect(user1).depositOnBehalf(underlyingAsset.address, buyCoverParams.amount, user1.address);
+
+      // deposit ETH
+      await setNextBlockBaseFeePerGas(0);
+      await coverManager
+        .connect(user1)
+        .depositETHOnBehalf(user1.address, { value: buyCoverParams.amount, gasPrice: 0 });
+
+      // check events
+      await expect(coverManager.connect(user1).withdraw(underlyingAsset.address, buyCoverParams.amount, user1.address))
+        .to.emit(coverManager, "Withdraw")
+        .withArgs(user1.address, user1.address, underlyingAsset.address, buyCoverParams.amount);
+
+      await expect(coverManager.connect(user1).withdraw(ETH_ADDRESS, buyCoverParams.amount, user1.address))
+        .to.emit(coverManager, "Withdraw")
+        .withArgs(user1.address, user1.address, ETH_ADDRESS, buyCoverParams.amount);
+    });
   });
 });
