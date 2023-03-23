@@ -168,7 +168,7 @@ describe("CoveredVault", function () {
       expect(await vault.latestUvRate()).to.equal(parseEther("0.5"));
     });
 
-    it("everts if not enough cover for the amount", async function () {
+    it("reverts if not enough cover for the amount", async function () {
       const { vault, cover } = await loadFixture(mintVaultSharesFixture);
       const [, , , admin] = await ethers.getSigners();
 
