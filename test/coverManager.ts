@@ -448,8 +448,59 @@ describe("CoverManager", function () {
   });
 
   describe("depositETHOnBehalf", function () {
-    // no-op
+    it("Should revert if deposit is not for address != sender and it is not allowed", async () => {
+      const { coverManager } = await loadFixture(deployVaultFixture);
+      const [user1, user2, , admin] = await ethers.getSigners();
+
+      await expect(
+        coverManager.connect(user2).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount }),
+      ).to.be.revertedWithCustomError(coverManager, "CoverManager_DepositNotAllowed");
+
+      await coverManager.connect(admin).addToAllowList(user1.address);
+      await expect(coverManager.connect(user2).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount })).to
+        .not.be.reverted;
+
+      // Not allowed but to == msg.sender
+      await expect(coverManager.connect(user2).depositETHOnBehalf(user2.address, { value: buyCoverParams.amount })).to
+        .not.be.reverted;
+    });
+
+    it("Should transfer ETH amount and increase funds in the same quantity", async () => {
+      const { coverManager } = await loadFixture(deployVaultFixture);
+      const [user1] = await ethers.getSigners();
+
+      const ETH_ADDRESS = await coverManager.ETH_ADDRESS();
+
+      const fundsBefore = await coverManager.funds(ETH_ADDRESS, user1.address);
+      const cmBalanceBefore = await ethers.provider.getBalance(coverManager.address);
+      const user1BalanceBefore = await ethers.provider.getBalance(user1.address);
+
+      await setNextBlockBaseFeePerGas(0);
+      await coverManager
+        .connect(user1)
+        .depositETHOnBehalf(user1.address, { value: buyCoverParams.amount, gasPrice: 0 });
+
+      const fundsAfter = await coverManager.funds(ETH_ADDRESS, user1.address);
+      const cmBalanceAfter = await ethers.provider.getBalance(coverManager.address);
+      const user1BalanceAfter = await ethers.provider.getBalance(user1.address);
+
+      expect(fundsAfter).to.be.eq(fundsBefore.add(buyCoverParams.amount));
+      expect(cmBalanceAfter).to.be.eq(cmBalanceBefore.add(buyCoverParams.amount));
+      expect(user1BalanceAfter).to.be.eq(user1BalanceBefore.sub(buyCoverParams.amount));
+    });
+
+    it("Should emit Deposit event", async () => {
+      const { coverManager } = await loadFixture(deployVaultFixture);
+      const [user1] = await ethers.getSigners();
+
+      const ETH_ADDRESS = await coverManager.ETH_ADDRESS();
+
+      await expect(coverManager.connect(user1).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount }))
+        .to.emit(coverManager, "Deposit")
+        .withArgs(user1.address, user1.address, ETH_ADDRESS, buyCoverParams.amount);
+    });
   });
+
   describe("withdraw", function () {
     // no-op
   });
