@@ -729,7 +729,7 @@ describe("CoveredVault", function () {
   });
 
   describe("withdrawCoverManagerAssets", function () {
-    it.only("Should revert if not admin", async function () {
+    it("Should revert if not admin", async function () {
       const { vault, coverManager, underlyingAsset } = await loadFixture(deployVaultFixture);
       const [user1, , , admin] = await ethers.getSigners();
 
@@ -739,14 +739,14 @@ describe("CoveredVault", function () {
       // deposit underlyingAsset
       await underlyingAsset.mint(user1.address, amount);
       await underlyingAsset.connect(user1).approve(coverManager.address, amount);
+      await coverManager.connect(admin).addToAllowList(vault.address);
 
-      await coverManager.connect(user1).depositOnBehalf(underlyingAsset.address, amount, user1.address);
+      await coverManager.connect(user1).depositOnBehalf(underlyingAsset.address, amount, vault.address);
 
       await expect(
         vault.connect(user1).withdrawCoverManagerAssets(underlyingAsset.address, amount, user1.address),
       ).to.be.revertedWith(`AccessControl: account ${user1.address.toLowerCase()} is missing role ${adminRole}`);
 
-      console.log({ admin: admin.address, user1: user1.address });
       await expect(vault.connect(admin).withdrawCoverManagerAssets(underlyingAsset.address, amount, user1.address)).to
         .not.be.reverted;
     });
