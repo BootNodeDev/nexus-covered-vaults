@@ -602,6 +602,30 @@ describe("CoveredVault", function () {
         "CoveredVault__FeeOutOfBound",
       );
     });
+
+    it("Should update proposed fee", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const fee = 1000;
+
+      {
+        const [proposedDeadline, proposedFee] = await vault.proposedDepositFee();
+        expect(proposedDeadline).to.eq(0);
+        expect(proposedFee).to.eq(0);
+      }
+
+      await expect(vault.connect(admin).setDepositFee(fee)).to.emit(vault, "NewDepositFeeProposed").withArgs(fee);
+
+      {
+        const latestBlock = await ethers.provider.getBlock("latest");
+        const feeTimeLock = await vault.FEE_TIME_LOCK();
+
+        const [proposedDeadline, proposedFee] = await vault.proposedDepositFee();
+        expect(proposedDeadline).to.eq(feeTimeLock.add(latestBlock.timestamp));
+        expect(proposedFee).to.eq(fee);
+      }
+    });
   });
 
   describe("applyDepositFee", function () {
@@ -674,21 +698,22 @@ describe("CoveredVault", function () {
       const [, , , admin] = await ethers.getSigners();
 
       const fee = BigNumber.from(0.3 * 1e4);
-      const timeLock = await vault.FEE_TIME_LOCK();
+      const feeTimeLock = await vault.FEE_TIME_LOCK();
 
       const depositFeeBeforeSet = await vault.depositFee();
-      await vault.connect(admin).setDepositFee(fee);
-
       expect(depositFeeBeforeSet).to.be.equal("0");
 
-      const [_proposedDeadline, proposedFee] = await vault.proposedDepositFee();
-      // TODO expect(proposedDeadline).to.be.eq(BigNumber.from(now));
+      await vault.connect(admin).setDepositFee(fee);
+
+      const latestBlock = await ethers.provider.getBlock("latest");
+      const [proposedDeadline, proposedFee] = await vault.proposedDepositFee();
+      expect(proposedDeadline).to.eq(feeTimeLock.add(latestBlock.timestamp));
       expect(proposedFee).to.be.eq(fee);
 
       const depositFeeAfterSet = await vault.depositFee();
       expect(depositFeeAfterSet).to.be.equal("0");
 
-      await increase(timeLock);
+      await increase(feeTimeLock);
       await vault.connect(admin).applyDepositFee();
 
       const depositFeeAfterApply = await vault.depositFee();
@@ -697,6 +722,213 @@ describe("CoveredVault", function () {
       const [resetDeadline, resetFee] = await vault.proposedDepositFee();
       expect(resetFee).to.be.eq("0");
       expect(resetDeadline).to.be.eq("0");
+    });
+  });
+
+  describe("setManagementFee", function () {
+    it("Should revert if not admin", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const fee = BigNumber.from(0.5 * 1e4);
+      const adminRole = await vault.DEFAULT_ADMIN_ROLE();
+
+      await expect(vault.connect(user1).setManagementFee(fee)).to.be.revertedWith(
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${adminRole}`,
+      );
+
+      await vault.connect(admin).setManagementFee(fee);
+    });
+
+    it("Should revert if proposed fee is bigger than 100%", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const fee = BigNumber.from(1.1 * 1e4);
+
+      await expect(vault.connect(admin).setManagementFee(fee)).to.revertedWithCustomError(
+        vault,
+        "CoveredVault__FeeOutOfBound",
+      );
+    });
+
+    it("Should update proposed fee", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const fee = 1000;
+
+      {
+        const [proposedDeadline, proposedFee] = await vault.proposedManagementFee();
+        expect(proposedDeadline).to.eq(0);
+        expect(proposedFee).to.eq(0);
+      }
+
+      await expect(vault.connect(admin).setManagementFee(fee)).to.emit(vault, "NewManagementFeeProposed").withArgs(fee);
+
+      {
+        const latestBlock = await ethers.provider.getBlock("latest");
+        const feeTimeLock = await vault.FEE_TIME_LOCK();
+
+        const [proposedDeadline, proposedFee] = await vault.proposedManagementFee();
+        expect(proposedDeadline).to.eq(feeTimeLock.add(latestBlock.timestamp));
+        expect(proposedFee).to.eq(fee);
+      }
+    });
+  });
+
+  describe("applyManagementFee", function () {
+    it("Should revert if not admin", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const fee = BigNumber.from(0.3 * 1e4);
+      const timeLock = await vault.FEE_TIME_LOCK();
+      const adminRole = await vault.DEFAULT_ADMIN_ROLE();
+
+      await vault.connect(admin).setManagementFee(fee);
+
+      await increase(timeLock);
+      await expect(vault.connect(user1).applyManagementFee()).to.be.revertedWith(
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${adminRole}`,
+      );
+
+      await vault.connect(admin).applyManagementFee();
+    });
+
+    it("Should revert if no proposed fee is found", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      await expect(vault.connect(admin).applyManagementFee()).to.revertedWithCustomError(
+        vault,
+        "CoveredVault__FeeProposalNotFound",
+      );
+    });
+
+    it("Should revert after apply was called once", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const fee = BigNumber.from(0.3 * 1e4);
+      const timeLock = await vault.FEE_TIME_LOCK();
+
+      await vault.connect(admin).setManagementFee(fee);
+
+      await increase(timeLock);
+      await vault.connect(admin).applyManagementFee();
+      await expect(vault.connect(admin).applyManagementFee()).to.revertedWithCustomError(
+        vault,
+        "CoveredVault__FeeProposalNotFound",
+      );
+    });
+
+    it("Should revert if deadline is not due", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const fee = BigNumber.from(0.3 * 1e4);
+      const timeLock = await vault.FEE_TIME_LOCK();
+
+      await vault.connect(admin).setManagementFee(fee);
+
+      await increase(timeLock.sub("60"));
+      await expect(vault.connect(admin).applyManagementFee()).to.revertedWithCustomError(
+        vault,
+        "CoveredVault__FeeTimeLockNotDue",
+      );
+
+      await increase(BigNumber.from("60"));
+      await vault.connect(admin).applyManagementFee();
+    });
+
+    it("Should change fee and reset proposed fee", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const fee = BigNumber.from(0.3 * 1e4);
+      const feeTimeLock = await vault.FEE_TIME_LOCK();
+
+      {
+        const managementFee = await vault.managementFee();
+        expect(managementFee).to.be.equal(0);
+      }
+
+      await vault.connect(admin).setManagementFee(fee);
+
+      const latestBlock = await ethers.provider.getBlock("latest");
+      const [proposedDeadline, proposedFee] = await vault.proposedManagementFee();
+      expect(proposedDeadline).to.eq(feeTimeLock.add(latestBlock.timestamp));
+      expect(proposedFee).to.be.eq(fee);
+
+      {
+        const managementFee = await vault.managementFee();
+        expect(managementFee).to.be.equal(0);
+      }
+
+      await increase(feeTimeLock);
+      await vault.connect(admin).applyManagementFee();
+
+      {
+        const managementFee = await vault.managementFee();
+        expect(managementFee).to.be.equal(fee);
+      }
+
+      const [resetDeadline, resetFee] = await vault.proposedManagementFee();
+      expect(resetFee).to.be.eq(0);
+      expect(resetDeadline).to.be.eq(0);
+    });
+
+    it("Should accrue management fee", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const firstFee = BigNumber.from(0.3 * 1e4);
+      const feeTimeLock = await vault.FEE_TIME_LOCK();
+      const feeDenominator = await vault.FEE_DENOMINATOR();
+      const feePeriod = await vault.FEE_MANAGER_PERIOD();
+
+      await vault.connect(admin).setManagementFee(firstFee);
+      await increase(feeTimeLock);
+      await vault.connect(admin).applyManagementFee();
+
+      const fee = BigNumber.from(0.5 * 1e4);
+
+      await vault.connect(admin).setManagementFee(fee);
+      await increase(feeTimeLock);
+      await vault.connect(admin).applyManagementFee();
+
+      const amount = parseEther("1000");
+      await underlyingAsset.mint(user1.address, amount);
+      await underlyingAsset.connect(user1).approve(vault.address, amount);
+      await vault.connect(user1)["deposit(uint256,address)"](amount, user1.address);
+
+      const latestBlock = await ethers.provider.getBlock("latest");
+      const lastManagementFeesUpdate = await vault.lastManagementFeesUpdate();
+      expect(lastManagementFeesUpdate).to.eq(latestBlock.timestamp);
+
+      await vault.connect(admin).invest(amount);
+
+      await vault.connect(admin).setManagementFee(fee);
+      await increase(feeTimeLock);
+
+      {
+        const accumulatedUVSharesFees = await vault.accumulatedUVSharesFees();
+        expect(accumulatedUVSharesFees).to.eq(0);
+      }
+
+      const feeAmount = amount.mul(feeTimeLock.add(2)).mul(fee).div(feeDenominator).div(feePeriod);
+      await expect(vault.connect(admin).applyManagementFee())
+        .to.emit(vault, "FeeAccrued")
+        .withArgs(underlyingVault.address, feeAmount);
+
+      {
+        const latestBlock = await ethers.provider.getBlock("latest");
+        const accumulatedUVSharesFees = await vault.accumulatedUVSharesFees();
+        const lastManagementFeesUpdate = await vault.lastManagementFeesUpdate();
+        expect(accumulatedUVSharesFees).to.eq(feeAmount);
+        expect(lastManagementFeesUpdate).to.eq(latestBlock.timestamp);
+      }
     });
   });
 
@@ -737,7 +969,7 @@ describe("CoveredVault", function () {
       );
     });
 
-    it("Should transfer fees to destination", async function () {
+    it("Should transfer deposit fees to destination", async function () {
       const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
       const [user1, destination, , admin] = await ethers.getSigners();
 
@@ -779,6 +1011,41 @@ describe("CoveredVault", function () {
 
       expect(balanceAfter).to.equal(initialBalance.add(accumulatedAssetFeesBefore));
       expect(accumulatedAssetFeesAfter).to.equal(0);
+    });
+
+    it("Should transfer management fees to destination", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(deployVaultFixture);
+      const [user1, destination, , admin] = await ethers.getSigners();
+
+      const feeTimeLock = await vault.FEE_TIME_LOCK();
+
+      const fee = BigNumber.from(0.5 * 1e4);
+
+      await vault.connect(admin).setManagementFee(fee);
+      await increase(feeTimeLock);
+      await vault.connect(admin).applyManagementFee();
+
+      const amount = parseEther("1000");
+      await underlyingAsset.mint(user1.address, amount);
+      await underlyingAsset.connect(user1).approve(vault.address, amount);
+      await vault.connect(user1)["deposit(uint256,address)"](amount, user1.address);
+
+      await vault.connect(admin).invest(amount);
+      await increase(feeTimeLock);
+      await vault.connect(admin).uninvest(amount);
+
+      const initialBalance = await underlyingVault.balanceOf(destination.address);
+
+      const accumulatedUVSharesFeesBefore = await vault.accumulatedUVSharesFees();
+      expect(accumulatedUVSharesFeesBefore).to.gt(0);
+
+      await vault.connect(admin).claimFees(destination.address);
+
+      const balanceAfter = await underlyingVault.balanceOf(destination.address);
+      const accumulatedUVSharesFeesAfter = await vault.accumulatedUVSharesFees();
+
+      expect(balanceAfter).to.equal(initialBalance.add(accumulatedUVSharesFeesBefore));
+      expect(accumulatedUVSharesFeesAfter).to.equal(0);
     });
   });
 
