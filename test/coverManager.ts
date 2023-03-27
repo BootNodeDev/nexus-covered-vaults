@@ -131,57 +131,6 @@ describe("CoverManager", function () {
       ).to.not.be.reverted;
     });
 
-    xit("Should return to sender amount not spent in ETH", async () => {
-      const { coverManager, cover } = await loadFixture(deployVaultFixture);
-      const [user1, , , admin] = await ethers.getSigners();
-
-      await coverManager.connect(admin).addToAllowList(user1.address);
-
-      const balanceBefore = await user1.getBalance();
-
-      await setNextBlockBaseFeePerGas(0);
-      await coverManager.connect(admin).depositETHOnBehalf(user1.address, { value: buyCoverParams.amount });
-
-      await coverManager
-        .connect(user1)
-        .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 0 }, [poolAlloc], {
-          gasPrice: 0,
-        });
-
-      const balanceAfter = await user1.getBalance();
-      const premium = await cover.premium();
-      const PREMIUM_DENOMINATOR = await cover.PREMIUM_DENOMINATOR();
-      const premiumAmount = buyCoverParams.amount.mul(premium).div(PREMIUM_DENOMINATOR);
-
-      expect(balanceAfter).to.be.eq(balanceBefore.sub(premiumAmount));
-    });
-
-    xit("Should return to sender amount not spent in asset", async () => {
-      const { coverManager, cover, underlyingAsset } = await loadFixture(deployVaultFixture);
-      const [user1, , , admin] = await ethers.getSigners();
-
-      await coverManager.connect(admin).addToAllowList(user1.address);
-      await underlyingAsset.mint(user1.address, ethers.utils.parseEther("10000"));
-      await underlyingAsset.connect(user1).approve(coverManager.address, ethers.utils.parseEther("10000"));
-
-      const balanceBefore = await underlyingAsset.balanceOf(user1.address);
-
-      await setNextBlockBaseFeePerGas(0);
-      await coverManager
-        .connect(user1)
-        .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 1 }, [poolAlloc], {
-          gasPrice: 0,
-        });
-
-      const balanceAfter = await underlyingAsset.balanceOf(user1.address);
-
-      const premium = await cover.premium();
-      const PREMIUM_DENOMINATOR = await cover.PREMIUM_DENOMINATOR();
-      const premiumAmount = buyCoverParams.amount.mul(premium).div(PREMIUM_DENOMINATOR);
-
-      expect(balanceAfter).to.be.eq(balanceBefore.sub(premiumAmount));
-    });
-
     it("Should revert if not enough funds to pay premium", async () => {
       const { coverManager, underlyingAsset } = await loadFixture(deployVaultFixture);
       const [user1, , , admin] = await ethers.getSigners();
