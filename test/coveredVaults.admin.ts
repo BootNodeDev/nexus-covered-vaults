@@ -10,6 +10,8 @@ const { parseEther } = ethers.utils;
 const vaultName = "USDC Covered Vault";
 const vaultSymbol = "cvUSDC";
 
+const daysToSeconds = (days: number) => days * 24 * 60 * 60;
+
 describe("CoveredVault", function () {
   describe("Deployment", function () {
     it("Should correctly set params", async function () {
@@ -164,6 +166,58 @@ describe("CoveredVault", function () {
       await vault.connect(admin).invest(investAmount);
 
       expect(await vault.latestUvRate()).to.equal(parseEther("0.5"));
+    });
+
+    it("reverts if not enough cover for the amount", async function () {
+      const { vault, cover } = await loadFixture(mintVaultSharesFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const investAmount = parseEther("1000");
+
+      const latestBlock = await ethers.provider.getBlock("latest");
+
+      await cover.setMockSegments(false);
+      await cover.setSegments(0, [
+        {
+          amount: investAmount.div(2),
+          start: latestBlock.timestamp,
+          period: daysToSeconds(30),
+          gracePeriod: 0,
+          globalRewardsRatio: 0,
+          globalCapacityRatio: 0,
+        },
+      ]);
+
+      await expect(vault.connect(admin).invest(investAmount)).to.be.revertedWithCustomError(
+        vault,
+        "CoveredVault__InvestExceedsCoverAmount",
+      );
+    });
+
+    it("reverts if cover expired", async function () {
+      const { vault, cover } = await loadFixture(mintVaultSharesFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const investAmount = parseEther("1000");
+
+      const latestBlock = await ethers.provider.getBlock("latest");
+
+      await cover.setMockSegments(false);
+      await cover.setSegments(0, [
+        {
+          amount: investAmount,
+          start: latestBlock.timestamp,
+          period: 0, // next block will be expired
+          gracePeriod: 0,
+          globalRewardsRatio: 0,
+          globalCapacityRatio: 0,
+        },
+      ]);
+
+      await expect(vault.connect(admin).invest(investAmount)).to.be.revertedWithCustomError(
+        vault,
+        "CoveredVault__InvestExceedsCoverAmount",
+      );
     });
   });
 

@@ -105,7 +105,7 @@ export async function deployCoverManager(underlyingAsset: ERC20Mock) {
 }
 
 export async function mintVaultSharesFixture() {
-  const { vault, underlyingVault, underlyingAsset } = await deployVaultFixture();
+  const { vault, underlyingVault, underlyingAsset, cover } = await deployVaultFixture();
   const [user1, user2] = await ethers.getSigners();
 
   // Mint assets to users
@@ -119,5 +119,5 @@ export async function mintVaultSharesFixture() {
   const depositAmount = parseEther("1000");
   await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
 
-  return { vault, underlyingVault, underlyingAsset };
+  return { vault, underlyingVault, underlyingAsset, cover };
 }
