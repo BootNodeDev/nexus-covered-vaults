@@ -727,4 +727,71 @@ describe("CoveredVault", function () {
       expect(accumulatedAssetFeesAfter).to.equal(0);
     });
   });
+
+  describe("withdrawCoverManagerAssets", function () {
+    it("Should revert if not admin", async function () {
+      const { vault, coverManager, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const amount = ethers.utils.parseEther("100");
+      const adminRole = await vault.DEFAULT_ADMIN_ROLE();
+
+      // deposit underlyingAsset
+      await underlyingAsset.mint(user1.address, amount);
+      await underlyingAsset.connect(user1).approve(coverManager.address, amount);
+      await coverManager.connect(admin).addToAllowList(vault.address);
+
+      await coverManager.connect(user1).depositOnBehalf(underlyingAsset.address, amount, vault.address);
+
+      await expect(
+        vault.connect(user1).withdrawCoverManagerAssets(underlyingAsset.address, amount, user1.address),
+      ).to.be.revertedWith(`AccessControl: account ${user1.address.toLowerCase()} is missing role ${adminRole}`);
+
+      await expect(vault.connect(admin).withdrawCoverManagerAssets(underlyingAsset.address, amount, user1.address)).to
+        .not.be.reverted;
+    });
+
+    it("Should revert if `to` goes back to vault again", async function () {
+      const { vault, coverManager, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const amount = ethers.utils.parseEther("100");
+
+      // deposit underlyingAsset
+      await underlyingAsset.mint(user1.address, amount);
+      await underlyingAsset.connect(user1).approve(coverManager.address, amount);
+      await coverManager.connect(admin).addToAllowList(vault.address);
+
+      await coverManager.connect(user1).depositOnBehalf(underlyingAsset.address, amount, vault.address);
+
+      await expect(
+        vault.connect(admin).withdrawCoverManagerAssets(underlyingAsset.address, amount, vault.address),
+      ).to.be.revertedWithCustomError(vault, "CoveredVault__InvalidWithdrawAddress");
+    });
+
+    it("Should call withdraw", async function () {
+      const { vault, coverManager, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const amount = ethers.utils.parseEther("100");
+
+      // deposit underlyingAsset
+      await underlyingAsset.mint(user1.address, amount);
+      await underlyingAsset.connect(user1).approve(coverManager.address, amount);
+      await coverManager.connect(admin).addToAllowList(vault.address);
+
+      await coverManager.connect(user1).depositOnBehalf(underlyingAsset.address, amount, vault.address);
+
+      const cmBalanceBefore = await underlyingAsset.balanceOf(coverManager.address);
+      const user1BalanceBefore = await underlyingAsset.balanceOf(user1.address);
+
+      await expect(vault.connect(admin).withdrawCoverManagerAssets(underlyingAsset.address, amount, user1.address));
+
+      const cmBalanceAfter = await underlyingAsset.balanceOf(coverManager.address);
+      const user1BalanceAfter = await underlyingAsset.balanceOf(user1.address);
+
+      expect(cmBalanceAfter).to.be.eq(0);
+      expect(user1BalanceAfter).to.be.eq(user1BalanceBefore.add(cmBalanceBefore));
+    });
+  });
 });
