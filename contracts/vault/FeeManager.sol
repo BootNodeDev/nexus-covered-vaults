@@ -51,7 +51,7 @@ abstract contract FeeManager is AccessManager {
 
   /**
    * @dev Annually percentage fee charged on invested assets.
-   * After construction is updated with `setDepositFee` and have effect after `applyDepositFee` is called with timelock due.
+   * After construction is updated with `setManagementFee` and have effect after `applyManagementFee` is called with timelock due.
    */
   uint256 public managementFee;
 
