@@ -432,6 +432,150 @@ describe("CoveredVault", function () {
     });
   });
 
+  describe("maxWithdraw", function () {
+    it("Should account for management fee", async function () {
+      const { vault, underlyingAsset } = await loadFixture(mintVaultSharesFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      // 50%
+      await vault.connect(admin).setManagementFee(0.5 * 1e4);
+      await increase(2 * 7 * 24 * 60 * 60); // 2 weeks
+      await vault.connect(admin).applyManagementFee();
+
+      const managementFee = await vault.managementFee();
+      const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
+      const FEE_MANAGER_PERIOD = await vault.FEE_MANAGER_PERIOD();
+
+      const user1Shares = await vault.balanceOf(user1.address);
+      const user1Balance = await vault.convertToAssets(user1Shares);
+
+      expect(await vault.accumulatedUVSharesFees()).to.equal(0);
+      expect(await vault.idleAssets()).to.equal(user1Balance);
+      expect(await vault.underlyingVaultShares()).to.equal(0);
+
+      {
+        const maxWithdraw = await vault.maxWithdraw(user1.address);
+        expect(maxWithdraw).to.equal(user1Balance);
+      }
+
+      // Invest all assets into underlying vault
+      const totalAssets = await underlyingAsset.balanceOf(vault.address);
+      await vault.connect(admin).invest(totalAssets);
+
+      expect(await vault.accumulatedUVSharesFees()).to.equal(0);
+      expect(await vault.idleAssets()).to.equal(0);
+      expect(await vault.underlyingVaultShares()).to.equal(totalAssets);
+
+      await increase(FEE_MANAGER_PERIOD);
+      const feeAmount = totalAssets
+        .mul(FEE_MANAGER_PERIOD)
+        .mul(managementFee)
+        .div(FEE_DENOMINATOR)
+        .div(FEE_MANAGER_PERIOD);
+
+      {
+        const maxWithdraw = await vault.maxWithdraw(user1.address);
+        expect(maxWithdraw).to.equal(user1Balance.sub(feeAmount));
+      }
+    });
+  });
+
+  describe("previewWithdraw", function () {
+    it("Should account for management fee", async function () {
+      const { vault, underlyingAsset } = await loadFixture(mintVaultSharesFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      // 50%
+      await vault.connect(admin).setManagementFee(0.5 * 1e4);
+      await increase(2 * 7 * 24 * 60 * 60); // 2 weeks
+      await vault.connect(admin).applyManagementFee();
+
+      const managementFee = await vault.managementFee();
+      const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
+      const FEE_MANAGER_PERIOD = await vault.FEE_MANAGER_PERIOD();
+
+      const user1Shares = await vault.balanceOf(user1.address);
+      const user1Balance = await vault.convertToAssets(user1Shares);
+
+      expect(await vault.accumulatedUVSharesFees()).to.equal(0);
+      expect(await vault.idleAssets()).to.equal(user1Balance);
+      expect(await vault.underlyingVaultShares()).to.equal(0);
+
+      {
+        const shares = await vault.previewWithdraw(user1Balance);
+        expect(shares).to.equal(user1Shares);
+      }
+
+      // Invest all assets into underlying vault
+      const totalAssets = await underlyingAsset.balanceOf(vault.address);
+      await vault.connect(admin).invest(totalAssets);
+
+      expect(await vault.accumulatedUVSharesFees()).to.equal(0);
+      expect(await vault.idleAssets()).to.equal(0);
+      expect(await vault.underlyingVaultShares()).to.equal(totalAssets);
+
+      await increase(FEE_MANAGER_PERIOD);
+      const feeAmount = totalAssets
+        .mul(FEE_MANAGER_PERIOD)
+        .mul(managementFee)
+        .div(FEE_DENOMINATOR)
+        .div(FEE_MANAGER_PERIOD);
+
+      {
+        const shares = await vault.previewWithdraw(user1Balance.sub(feeAmount));
+        expect(shares).to.equal(user1Shares);
+      }
+    });
+  });
+
+  describe("previewRedeem", function () {
+    it("Should account for management fee", async function () {
+      const { vault, underlyingAsset } = await loadFixture(mintVaultSharesFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      // 50%
+      await vault.connect(admin).setManagementFee(0.5 * 1e4);
+      await increase(2 * 7 * 24 * 60 * 60); // 2 weeks
+      await vault.connect(admin).applyManagementFee();
+
+      const managementFee = await vault.managementFee();
+      const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
+      const FEE_MANAGER_PERIOD = await vault.FEE_MANAGER_PERIOD();
+
+      const user1Shares = await vault.balanceOf(user1.address);
+      const user1Balance = await vault.convertToAssets(user1Shares);
+
+      expect(await vault.accumulatedUVSharesFees()).to.equal(0);
+      expect(await vault.idleAssets()).to.equal(user1Balance);
+      expect(await vault.underlyingVaultShares()).to.equal(0);
+
+      {
+        const assets = await vault.previewRedeem(user1Shares);
+        expect(assets).to.equal(user1Balance);
+      }
+
+      // Invest all assets into underlying vault
+      const totalAssets = await underlyingAsset.balanceOf(vault.address);
+      await vault.connect(admin).invest(totalAssets);
+
+      expect(await vault.accumulatedUVSharesFees()).to.equal(0);
+      expect(await vault.idleAssets()).to.equal(0);
+      expect(await vault.underlyingVaultShares()).to.equal(totalAssets);
+
+      await increase(FEE_MANAGER_PERIOD);
+      const feeAmount = totalAssets
+        .mul(FEE_MANAGER_PERIOD)
+        .mul(managementFee)
+        .div(FEE_DENOMINATOR)
+        .div(FEE_MANAGER_PERIOD);
+
+      {
+        const assets = await vault.previewRedeem(user1Shares);
+        expect(assets).to.equal(user1Balance.sub(feeAmount));
+      }
+    });
+  });
+
   describe("deposit", function () {
     it("Should account for assets in the vault", async function () {
       const { vault, underlyingAsset, underlyingVault } = await loadFixture(deployVaultFixture);
@@ -583,7 +727,7 @@ describe("CoveredVault", function () {
   });
 
   describe("deposit with fee", function () {
-    it("Should discount fee and accumulate it for operator", async function () {
+    it("Should discount deposit fee and accumulate it for operator", async function () {
       const { vault, underlyingAsset, underlyingVault } = await loadFixture(deployVaultFixture);
       const [user1, user2, user3, admin] = await ethers.getSigners();
 
@@ -652,6 +796,56 @@ describe("CoveredVault", function () {
       expect(await vault.idleAssets()).to.equal(depositAmount.sub(fee).mul(2));
       expect(await vault.underlyingVaultShares()).to.equal(depositAmount.sub(fee).mul(2));
       expect(await vault.accumulatedAssetFees()).to.equal(fee.mul(4));
+    });
+
+    it("Should discount management fee and accumulate it for operator", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, user2, , admin] = await ethers.getSigners();
+
+      // 50%
+      await vault.connect(admin).setManagementFee(0.5 * 1e4);
+      await increase(2 * 7 * 24 * 60 * 60); // 2 weeks
+      await vault.connect(admin).applyManagementFee();
+
+      const managementFee = await vault.managementFee();
+      const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
+      const FEE_MANAGER_PERIOD = await vault.FEE_MANAGER_PERIOD();
+
+      // Mint assets to user and deposit
+      const depositAmount = ethers.utils.parseEther("100");
+      await underlyingAsset.mint(user1.address, depositAmount);
+      await underlyingAsset.mint(user2.address, depositAmount);
+      await underlyingAsset.connect(user1).approve(vault.address, depositAmount);
+      await underlyingAsset.connect(user2).approve(vault.address, depositAmount);
+
+      await vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address);
+
+      const firstDepositSharesUser1 = await vault.balanceOf(user1.address);
+
+      await vault.connect(admin).invest(depositAmount);
+
+      expect(await vault.accumulatedUVSharesFees()).to.equal(0);
+      expect(await vault.underlyingVaultShares()).to.equal(depositAmount);
+
+      await increase(FEE_MANAGER_PERIOD.sub(1));
+      const feeAmount = depositAmount
+        .mul(FEE_MANAGER_PERIOD)
+        .mul(managementFee)
+        .div(FEE_DENOMINATOR)
+        .div(FEE_MANAGER_PERIOD);
+
+      // should account for management fees
+      await vault.connect(user2)["deposit(uint256,address)"](depositAmount, user2.address);
+
+      const firstDepositSharesUser2 = await vault.balanceOf(user2.address);
+
+      expect(firstDepositSharesUser2).to.gt(firstDepositSharesUser1);
+
+      const newShares = depositAmount.mul(depositAmount).div(depositAmount.sub(feeAmount));
+      expect(firstDepositSharesUser2).to.equal(newShares);
+
+      expect(await vault.accumulatedUVSharesFees()).to.equal(feeAmount);
+      expect(await vault.underlyingVaultShares()).to.equal(depositAmount.sub(feeAmount));
     });
   });
 
@@ -821,7 +1015,7 @@ describe("CoveredVault", function () {
   });
 
   describe("mint with fee", function () {
-    it("Should discount fee and accumulate it to operator", async function () {
+    it("Should discount deposit fee and accumulate it to operator", async function () {
       const { vault, underlyingAsset, underlyingVault } = await loadFixture(deployVaultFixture);
       const [user1, user2, user3, admin] = await ethers.getSigners();
 
@@ -892,6 +1086,65 @@ describe("CoveredVault", function () {
       expect(await vault.idleAssets()).to.equal(depositAmount.sub(fee).mul(2));
       expect(await vault.underlyingVaultShares()).to.equal(depositAmount.sub(fee).mul(2));
       expect(await vault.accumulatedAssetFees()).to.equal(fee.mul(4));
+    });
+
+    it("Should discount management fee and accumulate it to operator", async function () {
+      const { vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+      const [user1, user2, , admin] = await ethers.getSigners();
+
+      // 50%
+      await vault.connect(admin).setManagementFee(0.5 * 1e4);
+      await increase(2 * 7 * 24 * 60 * 60); // 2 weeks
+      await vault.connect(admin).applyManagementFee();
+
+      const managementFee = await vault.managementFee();
+      const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
+      const FEE_MANAGER_PERIOD = await vault.FEE_MANAGER_PERIOD();
+
+      // Mint assets to user and deposit
+      const sharesToMint = ethers.utils.parseEther("100"); // As an inverse cases of deposit with fee test
+      const depositAmount = sharesToMint;
+
+      await underlyingAsset.mint(user1.address, depositAmount);
+      await underlyingAsset.mint(user2.address, depositAmount);
+      await underlyingAsset.connect(user1).approve(vault.address, depositAmount);
+      await underlyingAsset.connect(user2).approve(vault.address, depositAmount);
+
+      const initialAssetsUser1 = await underlyingAsset.balanceOf(user1.address);
+
+      await vault.connect(user1)["mint(uint256,address)"](sharesToMint, user1.address);
+
+      const afterDepositAssetsUser1 = await underlyingAsset.balanceOf(user1.address);
+
+      await vault.connect(admin).invest(depositAmount);
+
+      expect(await vault.accumulatedUVSharesFees()).to.equal(0);
+      expect(await vault.underlyingVaultShares()).to.equal(depositAmount);
+
+      await increase(FEE_MANAGER_PERIOD.sub(1));
+      const feeAmount = depositAmount
+        .mul(FEE_MANAGER_PERIOD)
+        .mul(managementFee)
+        .div(FEE_DENOMINATOR)
+        .div(FEE_MANAGER_PERIOD);
+
+      // shares = depositAmount * supply / totalAssets
+      const secondDeposit = sharesToMint.mul(depositAmount.sub(feeAmount)).div(depositAmount);
+
+      const initialAssetsUser2 = await underlyingAsset.balanceOf(user2.address);
+
+      await vault.connect(user2)["mint(uint256,address)"](sharesToMint, user2.address);
+
+      const afterDepositAssetsUser2 = await underlyingAsset.balanceOf(user2.address);
+
+      // second deposit took less asset to mint same amount of shares
+      expect(secondDeposit).to.lt(depositAmount);
+
+      expect(afterDepositAssetsUser1).to.equal(initialAssetsUser1.sub(depositAmount));
+      expect(afterDepositAssetsUser2).to.equal(initialAssetsUser2.sub(secondDeposit));
+
+      expect(await vault.accumulatedUVSharesFees()).to.equal(feeAmount);
+      expect(await vault.underlyingVaultShares()).to.equal(depositAmount.sub(feeAmount));
     });
   });
 
@@ -1139,6 +1392,55 @@ describe("CoveredVault", function () {
       await vault["redeem(uint256,address,address)"](user1Balance, user1.address, user1.address);
 
       expect(await vault.latestUvRate()).to.equal(parseEther("0.5"));
+    });
+
+    it("Should redeem shares accounting for management fee", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      // 50%
+      await vault.connect(admin).setManagementFee(0.5 * 1e4);
+      await increase(2 * 7 * 24 * 60 * 60); // 2 weeks
+      await vault.connect(admin).applyManagementFee();
+
+      const managementFee = await vault.managementFee();
+      const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
+      const FEE_MANAGER_PERIOD = await vault.FEE_MANAGER_PERIOD();
+
+      const user1Balance = await vault.balanceOf(user1.address);
+      const initialUser1Assets = await vault.convertToAssets(user1Balance);
+
+      expect(await vault.idleAssets()).to.equal(initialUser1Assets);
+      expect(await vault.underlyingVaultShares()).to.equal(0);
+
+      // Invest all assets into underlying vault
+      const totalAssets = await underlyingAsset.balanceOf(vault.address);
+      await vault.connect(admin).invest(totalAssets);
+
+      expect(await vault.accumulatedUVSharesFees()).to.equal(0);
+      expect(await vault.idleAssets()).to.equal(0);
+      expect(await vault.underlyingVaultShares()).to.equal(initialUser1Assets);
+
+      await increase(FEE_MANAGER_PERIOD.sub(1));
+      const feeAmount = initialUser1Assets
+        .mul(FEE_MANAGER_PERIOD)
+        .mul(managementFee)
+        .div(FEE_DENOMINATOR)
+        .div(FEE_MANAGER_PERIOD);
+
+      const redeemTx = await vault["redeem(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      expect(await vault.accumulatedUVSharesFees()).to.equal(feeAmount);
+      expect(await vault.idleAssets()).to.equal(0);
+      expect(await vault.underlyingVaultShares()).to.equal(0);
+
+      await expect(redeemTx).to.changeTokenBalances(
+        underlyingAsset,
+        [user1.address, underlyingVault.address, vault.address],
+        [totalAssets.sub(feeAmount), totalAssets.sub(feeAmount).mul(-1), 0],
+      );
+      await expect(redeemTx).to.changeTokenBalance(vault, user1.address, user1Balance.mul(-1));
+      await expect(redeemTx).to.changeTokenBalance(underlyingVault, vault.address, totalAssets.sub(feeAmount).mul(-1));
     });
   });
 
@@ -1397,6 +1699,64 @@ describe("CoveredVault", function () {
       await vault["withdraw(uint256,address,address)"](user1Balance.div(2), user1.address, user1.address);
 
       expect(await vault.latestUvRate()).to.equal(parseEther("0.5"));
+    });
+
+    it("Should withdraw assets accounting for management fee", async function () {
+      const { vault, underlyingAsset, underlyingVault } = await loadFixture(mintVaultSharesFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      // 50%
+      await vault.connect(admin).setManagementFee(0.5 * 1e4);
+      await increase(2 * 7 * 24 * 60 * 60); // 2 weeks
+      await vault.connect(admin).applyManagementFee();
+
+      const managementFee = await vault.managementFee();
+      const FEE_DENOMINATOR = await vault.FEE_DENOMINATOR();
+      const FEE_MANAGER_PERIOD = await vault.FEE_MANAGER_PERIOD();
+
+      const user1Shares = await vault.balanceOf(user1.address);
+      const user1Balance = await vault.convertToAssets(user1Shares);
+
+      expect(await vault.accumulatedUVSharesFees()).to.equal(0);
+      expect(await vault.idleAssets()).to.equal(user1Balance);
+      expect(await vault.underlyingVaultShares()).to.equal(0);
+
+      // Invest all assets into underlying vault
+      const totalAssets = await underlyingAsset.balanceOf(vault.address);
+      await vault.connect(admin).invest(totalAssets);
+
+      expect(await vault.accumulatedUVSharesFees()).to.equal(0);
+      expect(await vault.idleAssets()).to.equal(0);
+      expect(await vault.underlyingVaultShares()).to.equal(totalAssets);
+
+      await increase(FEE_MANAGER_PERIOD.sub(1));
+      const feeAmount = totalAssets
+        .mul(FEE_MANAGER_PERIOD)
+        .mul(managementFee)
+        .div(FEE_DENOMINATOR)
+        .div(FEE_MANAGER_PERIOD);
+
+      const withdrawTx = await vault["withdraw(uint256,address,address)"](
+        user1Balance.sub(feeAmount),
+        user1.address,
+        user1.address,
+      );
+
+      expect(await vault.accumulatedUVSharesFees()).to.equal(feeAmount);
+      expect(await vault.idleAssets()).to.equal(0);
+      expect(await vault.underlyingVaultShares()).to.equal(0);
+
+      await expect(withdrawTx).to.changeTokenBalances(
+        underlyingAsset,
+        [user1.address, underlyingVault.address, vault.address],
+        [totalAssets.sub(feeAmount), totalAssets.sub(feeAmount).mul(-1), 0],
+      );
+      await expect(withdrawTx).to.changeTokenBalance(vault, user1.address, user1Shares.mul(-1));
+      await expect(withdrawTx).to.changeTokenBalance(
+        underlyingVault,
+        vault.address,
+        totalAssets.sub(feeAmount).mul(-1),
+      );
     });
   });
 
