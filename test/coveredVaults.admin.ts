@@ -848,4 +848,148 @@ describe("CoveredVault", function () {
       expect(user1BalanceAfter).to.be.eq(user1BalanceBefore.add(cmBalanceBefore));
     });
   });
+
+  describe("buyCover", function () {
+    it("Should revert if not admin or bot", async function () {
+      const { vault, coverManager } = await loadFixture(deployVaultFixture);
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const botRole = await vault.BOT_ROLE();
+      const amount = parseEther("1000");
+
+      await coverManager.connect(admin).addToAllowList(vault.address);
+      await coverManager.connect(admin).depositETHOnBehalf(vault.address, { value: amount });
+
+      await expect(vault.connect(user1).buyCover(amount.div(2), 0, amount.div(10), [])).to.be.revertedWith(
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${botRole}`,
+      );
+
+      await expect(vault.connect(admin).buyCover(amount.div(2), 0, amount.div(10), [])).to.not.be.reverted;
+
+      await vault.connect(admin).grantRole(botRole, user1.address);
+      await vault.connect(user1).buyCover(amount.div(2), 0, amount.div(10), []);
+      await expect(vault.connect(user1).buyCover(amount.div(2), 0, amount.div(10), [])).to.not.be.reverted;
+    });
+
+    it("Should revert if paused", async function () {
+      const { vault, coverManager } = await loadFixture(deployVaultFixture);
+      const [, , , admin] = await ethers.getSigners();
+
+      const amount = parseEther("1000");
+      await vault.connect(admin).pause();
+
+      await coverManager.connect(admin).addToAllowList(vault.address);
+      await coverManager.connect(admin).depositETHOnBehalf(vault.address, { value: amount });
+
+      await expect(vault.connect(admin).buyCover(amount.div(2), 0, amount.div(10), [])).to.be.revertedWith(
+        "Pausable: paused",
+      );
+    });
+
+    it("Should revert if amount to cover is lower than invested amount", async function () {
+      const { coverManager, vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const amount = parseEther("1000");
+
+      await coverManager.connect(admin).addToAllowList(vault.address);
+      await coverManager.connect(admin).depositETHOnBehalf(vault.address, { value: amount });
+
+      await underlyingAsset.mint(user1.address, amount);
+
+      await underlyingAsset.connect(user1).approve(vault.address, amount);
+      await vault.connect(user1)["deposit(uint256,address)"](amount, user1.address);
+
+      // invested: 0 with cover: amount/2
+      await expect(vault.connect(admin).buyCover(amount.div(2), 0, amount.div(10), [])).to.not.be.reverted;
+
+      // invested: amount with cover: amount/2
+      await vault.connect(admin).invest(amount);
+      await expect(vault.connect(admin).buyCover(amount.div(2), 0, amount.div(10), [])).to.be.revertedWithCustomError(
+        vault,
+        "CoveredVault__InvalidBuyCoverAmount",
+      );
+    });
+
+    it("Should be able to increase covered amount", async function () {
+      const { coverManager, vault, underlyingAsset } = await loadFixture(deployVaultFixture);
+
+      const [user1, , , admin] = await ethers.getSigners();
+
+      const amount = parseEther("100");
+
+      await coverManager.connect(admin).addToAllowList(vault.address);
+      await coverManager.connect(admin).depositETHOnBehalf(vault.address, { value: amount });
+
+      await underlyingAsset.mint(user1.address, amount.mul(10));
+
+      await underlyingAsset.connect(user1).approve(vault.address, amount.mul(10));
+      await vault.connect(user1)["deposit(uint256,address)"](amount.mul(10), user1.address);
+
+      await vault.connect(admin).invest(amount);
+      const coverId0 = await vault.coverId();
+
+      // invested: amout with cover: amount
+      await expect(vault.connect(admin).buyCover(amount, 0, amount.div(10), [])).to.not.be.reverted;
+      const coverId1 = await vault.coverId();
+
+      // invested: amount with cover * 2
+      await expect(vault.connect(admin).buyCover(amount.mul(2), 0, amount.div(10), [])).to.not.be.reverted;
+      const coverId2 = await vault.coverId();
+
+      // coverId should not change after increasing coverage
+      expect(coverId1).to.be.eq(coverId2);
+
+      // Was a new coverId
+      expect(coverId0).to.eq(0);
+    });
+
+    xit("Should change coverId if the previous one is expired", async function () {
+      const { coverManager, vault } = await loadFixture(deployVaultFixture);
+
+      const [, , , admin] = await ethers.getSigners();
+
+      const amount = parseEther("100");
+
+      await coverManager.connect(admin).addToAllowList(vault.address);
+      await coverManager.connect(admin).depositETHOnBehalf(vault.address, { value: amount });
+
+      await expect(vault.connect(admin).buyCover(amount, 0, amount.div(10), [])).to.not.be.reverted;
+      const coverId0 = await vault.coverId();
+
+      // TODO expire cover
+
+      await expect(vault.connect(admin).buyCover(amount, 0, amount.div(10), [])).to.not.be.reverted;
+      const coverId1 = await vault.coverId();
+
+      // coverId should change if previous one was expired
+      expect(coverId1).to.be.not.eq(coverId0);
+    });
+
+    it("Should set coverId and have coveredVault as owner of coverNFT", async function () {
+      const { coverManager, vault, coverNFT } = await loadFixture(deployVaultFixture);
+
+      const [, , , admin] = await ethers.getSigners();
+
+      const amount = parseEther("100");
+
+      await coverManager.connect(admin).addToAllowList(vault.address);
+      await coverManager.connect(admin).depositETHOnBehalf(vault.address, { value: amount });
+
+      const coverId0 = await vault.coverId();
+
+      await expect(vault.connect(admin).buyCover(amount, 0, amount.div(10), [])).to.not.be.reverted;
+      const coverId1 = await vault.coverId();
+
+      // coverId should not change after increasing coverage
+      expect(coverId1).to.be.not.eq(coverId0);
+
+      // Was a new coverId
+      expect(coverId0).to.eq(0);
+
+      const owner = await coverNFT.ownerOf(coverId1);
+      expect(owner).to.be.eq(vault.address);
+    });
+  });
 });
