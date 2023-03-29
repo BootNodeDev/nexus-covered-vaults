@@ -945,8 +945,8 @@ describe("CoveredVault", function () {
       expect(coverId0).to.eq(0);
     });
 
-    xit("Should change coverId if the previous one is expired", async function () {
-      const { coverManager, vault } = await loadFixture(deployVaultFixture);
+    it("Should change coverId if the previous one is expired", async function () {
+      const { coverManager, vault, cover, underlyingAsset } = await loadFixture(deployVaultFixture);
 
       const [, , , admin] = await ethers.getSigners();
 
@@ -955,12 +955,31 @@ describe("CoveredVault", function () {
       await coverManager.connect(admin).addToAllowList(vault.address);
       await coverManager.connect(admin).depositETHOnBehalf(vault.address, { value: amount });
 
-      await expect(vault.connect(admin).buyCover(amount, 0, amount.div(10), [])).to.not.be.reverted;
+      await underlyingAsset.mint(admin.address, amount.mul(10));
+
+      await underlyingAsset.connect(admin).approve(vault.address, amount.mul(10));
+      await vault.connect(admin)["deposit(uint256,address)"](amount.mul(10), admin.address);
+
+      await vault.connect(admin).invest(amount);
+
+      await cover.setMockSegments(false);
+
+      await expect(vault.connect(admin).buyCover(amount.mul(2), 0, amount.div(10), [])).to.not.be.reverted;
       const coverId0 = await vault.coverId();
 
-      // TODO expire cover
+      const latestBlock = await ethers.provider.getBlock("latest");
+      await cover.setSegments(1, [
+        {
+          amount,
+          start: latestBlock.timestamp,
+          period: 0, // next block will be expired
+          gracePeriod: 0,
+          globalRewardsRatio: 0,
+          globalCapacityRatio: 0,
+        },
+      ]);
 
-      await expect(vault.connect(admin).buyCover(amount, 0, amount.div(10), [])).to.not.be.reverted;
+      await expect(vault.connect(admin).buyCover(amount.mul(3), 0, amount.div(10), [])).to.not.be.reverted;
       const coverId1 = await vault.coverId();
 
       // coverId should change if previous one was expired

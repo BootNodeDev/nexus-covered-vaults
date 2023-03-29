@@ -350,7 +350,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
     uint256 newCoverId = coverManager.buyCover(params, _coverChunkRequests);
 
     // If a new cover was purchased, update the coverId so next time the current cover is edited
-    if (coverId == 0) {
+    if (coverId != newCoverId) {
       coverId = newCoverId;
     }
   }
