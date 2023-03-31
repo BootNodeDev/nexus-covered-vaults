@@ -31,6 +31,17 @@ Run unit tests:
 $ yarn test
 ```
 
+### Integration Test
+
+Runs integration tests with Nexus Mutual V2 on a Mainnet fork.
+
+Complete `FORK_URL` in `.env` file
+
+Run tests
+```sh
+$ yarn test:fork
+```
+
 ### Coverage
 
 Run unit tests coverage:

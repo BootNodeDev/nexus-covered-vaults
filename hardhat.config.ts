@@ -35,6 +35,13 @@ const config: HardhatUserConfig = {
       accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
       gasPrice,
     },
+    hardhat: {
+      forking: process.env.FORK_URL
+        ? {
+            url: process.env.FORK_URL,
+          }
+        : undefined,
+    },
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY,

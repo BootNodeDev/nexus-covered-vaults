@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.17;
 
-import { ICover, BuyCoverParams, PoolAllocationRequest, Product, CoverData, ProductParam, CoverSegment } from "./../interfaces/ICover.sol";
+import { ICover, BuyCoverParams, PoolAllocationRequest, Product, CoverData, ProductParam, CoverSegment, ProductType, ProductInitializationParams } from "./../interfaces/ICover.sol";
 import { IPool } from "./../interfaces/IPool.sol";
 import { ICoverNFT } from "./../interfaces/ICoverNFT.sol";
 
@@ -118,5 +118,26 @@ contract CoverMock is ICover {
     }
 
     return segments[_coverId][_segmentId];
+  }
+
+  // Used for integration tests only
+  function productsCount() external view returns (uint) {
+    // solhint-disable-previous-line no-empty-blocks
+  }
+
+  // Used for integration tests only
+  function createStakingPool(
+    bool isPrivatePool,
+    uint initialPoolFee,
+    uint maxPoolFee,
+    ProductInitializationParams[] calldata productInitParams,
+    string calldata ipfsDescriptionHash
+  ) external returns (uint poolId, address stakingPoolAddress) {
+    // solhint-disable-previous-line no-empty-blocks
+  }
+
+  // Used for integration tests only
+  function stakingPool(uint poolId) external view returns (address) {
+    // solhint-disable-previous-line no-empty-blocks
   }
 }
