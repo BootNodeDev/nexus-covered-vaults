@@ -5,7 +5,8 @@
   "license": "UNLICENSED",
   "scripts": {
     "compile": "hardhat compile",
-    "test": "hardhat test",
+    "test": "hardhat test test/**.ts",
+    "test:fork": "hardhat test test/fork/**.ts",
     "coverage": "hardhat coverage",
     "gas-report": "REPORT_GAS=true hardhat test",
     "lint": "yarn run lint:sol && yarn run lint:ts && yarn run prettier:check",

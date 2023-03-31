@@ -57,6 +57,18 @@ struct ProductParam {
   uint[] allowedPools;
 }
 
+struct ProductType {
+  uint8 claimMethod;
+  uint32 gracePeriod;
+}
+
+struct ProductInitializationParams {
+  uint productId;
+  uint8 weight;
+  uint96 initialPrice;
+  uint96 targetPrice;
+}
+
 interface ICover {
   function buyCover(
     BuyCoverParams calldata params,
@@ -72,4 +84,18 @@ interface ICover {
   function coverSegmentsCount(uint coverId) external view returns (uint);
 
   function coverSegmentWithRemainingAmount(uint coverId, uint segmentId) external view returns (CoverSegment memory);
+
+  function setProducts(ProductParam[] calldata params) external;
+
+  function productsCount() external view returns (uint);
+
+  function createStakingPool(
+    bool isPrivatePool,
+    uint initialPoolFee,
+    uint maxPoolFee,
+    ProductInitializationParams[] calldata productInitParams,
+    string calldata ipfsDescriptionHash
+  ) external returns (uint poolId, address stakingPoolAddress);
+
+  function stakingPool(uint poolId) external view returns (address);
 }
