@@ -1760,6 +1760,33 @@ describe("CoveredVault", function () {
         totalAssets.sub(feeAmount).mul(-1),
       );
     });
+
+    it("Should withdraw assets for vault shares using shares allowance", async function () {
+      const { vault, underlyingAsset } = await loadFixture(mintVaultSharesFixture);
+      const [user1, user2] = await ethers.getSigners();
+
+      const user1Shares = await vault.balanceOf(user1.address);
+      const user1Balance = await vault.convertToAssets(user1Shares);
+
+      expect(await vault.idleAssets()).to.equal(user1Balance);
+      expect(await vault.underlyingVaultShares()).to.equal(0);
+
+      await vault.approve(user2.address, user1Shares);
+
+      const withdrawTx = await vault
+        .connect(user2)
+        ["withdraw(uint256,address,address)"](user1Balance, user1.address, user1.address);
+
+      expect(await vault.idleAssets()).to.equal(0);
+      expect(await vault.underlyingVaultShares()).to.equal(0);
+
+      await expect(withdrawTx).to.changeTokenBalances(
+        underlyingAsset,
+        [user1.address, vault.address],
+        [user1Balance, user1Balance.mul(-1)],
+      );
+      await expect(withdrawTx).to.changeTokenBalance(vault, user1.address, user1Balance.mul(-1));
+    });
   });
 
   describe("ERC-5143", function () {
