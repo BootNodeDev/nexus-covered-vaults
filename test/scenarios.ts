@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 import { deployVaultAssetFixture, deployVaultFixture } from "./utils/fixtures";
 
 // TODO Fix .mul(3)
-describe("Scenarios", function () {
+describe.only("Scenarios", function () {
   describe("Base", function () {
     it("Should return amount of shares after yield", async function () {
       const { underlyingAsset, vault, underlyingVault } = await loadFixture(deployVaultFixture);
@@ -112,6 +112,8 @@ describe("Scenarios", function () {
       const yieldAmount1 = ethers.utils.parseEther("100");
       await underlyingAsset.mint(underlyingVault.address, yieldAmount1);
 
+      // TODO Cover Update past 30 days. Rebalance days.
+
       // User A withdraws 1000 shares
       await vault.connect(userA)["withdraw(uint256,address,address)"](userAAmount, userA.address, userA.address);
 
@@ -130,8 +132,6 @@ describe("Scenarios", function () {
       const userCShares = await vault.balanceOf(userC.address);
       expect(userCShares).to.be.gt(expectedWithdrawLowerBound).and.be.lt(expectedWithdrawUpperBound);
 
-      // User B withdraw 1000 shares
-
       // Yield generated
       const yieldAmount3 = ethers.utils.parseEther("50");
       await underlyingAsset.mint(underlyingVault.address, yieldAmount3);
@@ -143,6 +143,9 @@ describe("Scenarios", function () {
       // user B withdraw 1000 shares
       const withdrawUserB = ethers.utils.parseEther("1000");
       await vault.connect(userB)["withdraw(uint256,address,address)"](withdrawUserB, userB.address, userB.address);
+
+      // TODO Operator withdraw all the shares
+      await vault.connect(admin).withdrawCoverManagerAssets(vault.address, ethers.utils.parseEther("1"), userA.address);
     });
   });
 });
