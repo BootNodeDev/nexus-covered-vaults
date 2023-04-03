@@ -1,10 +1,10 @@
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { deployVaultFixture } from "./utils/fixtures";
+import { deployVaultAssetFixture, deployVaultFixture } from "./utils/fixtures";
 
 // TODO Fix .mul(3)
-describe.only("Scenarios", function () {
+describe("Scenarios", function () {
   describe("Base", function () {
     it("Should return amount of shares after yield", async function () {
       const { underlyingAsset, vault, underlyingVault } = await loadFixture(deployVaultFixture);
@@ -73,9 +73,7 @@ describe.only("Scenarios", function () {
 
   describe("Base + Cover", function () {
     it("Should rebalance cover and be able to withdraw all funds", async function () {
-      const { cover, coverManager, underlyingAsset, vault, underlyingVault, yieldTokenIncidents } = await loadFixture(
-        deployVaultFixture,
-      );
+      const { coverManager, underlyingAsset, vault, underlyingVault } = await loadFixture(deployVaultAssetFixture);
       const [userA, userB, userC, admin, bot] = await ethers.getSigners();
 
       // User A deposits 1000 DAI and gets 1000 shares
@@ -103,11 +101,11 @@ describe.only("Scenarios", function () {
       expect(investedAssets).to.be.eq(totalDeployed); // 3000
 
       // buyCover
-      const premium = ethers.utils.parseEther("26");
+      const premium = ethers.utils.parseEther("30");
       await coverManager.connect(admin).addToAllowList(vault.address);
-      await underlyingAsset.mint(admin.address, premium);
+      await underlyingAsset.mint(admin.address, premium.mul(20));
       await underlyingAsset.connect(admin).approve(coverManager.address, premium);
-      await coverManager.connect(admin).depositOnBehalf(underlyingAsset.address, premium, admin.address);
+      await coverManager.connect(admin).depositOnBehalf(underlyingAsset.address, premium, vault.address);
       await vault.connect(admin).buyCover(totalDeployed, 90, premium, []);
 
       // Yield generated

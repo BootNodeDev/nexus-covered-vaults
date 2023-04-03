@@ -32,11 +32,14 @@ export async function deployUnderlyingVaultFixture(): VaultFixture {
 }
 
 export const deployVaultFixture = async () => deployVaultFixtureCreator();
+export const deployVaultAssetFixture = async () => deployVaultFixtureCreator(1);
 
-async function deployVaultFixtureCreator(depositFee = 0, managementFee = 0) {
+async function deployVaultFixtureCreator(coverAsset = 0) {
   const { underlyingVault, underlyingAsset } = await deployUnderlyingVaultFixture();
   const { vaultFactory } = await deployVaultFactoryFixture();
   const { coverManager, cover, coverNFT, yieldTokenIncidents } = await deployCoverManager(underlyingAsset);
+  const depositFee = 0;
+  const managementFee = 0;
 
   const [, , , admin] = await ethers.getSigners();
 
@@ -52,7 +55,7 @@ async function deployVaultFixtureCreator(depositFee = 0, managementFee = 0) {
       maxAssetsLimit,
       10000,
       1,
-      0,
+      coverAsset,
       coverManager.address,
       depositFee,
       managementFee,
