@@ -707,7 +707,9 @@ describe("CoveredVault", function () {
       expect(await vault.idleAssets()).to.equal(depositAssets);
 
       // Deposit assets into underlying vault to the vault account
-      await vault.connect(admin).invest(depositAssets);
+      await expect(vault.connect(admin).invest(depositAssets))
+        .to.emit(vault, "UnderlyingVaultRateUpdated")
+        .withArgs(parseEther("1"));
 
       expect(await vault.latestUvRate()).to.equal(parseEther("1"));
       // burn 50% of assets in underlying vault
@@ -1949,8 +1951,15 @@ describe("CoveredVault", function () {
       const idleAssetsBefore = await vault.idleAssets();
       const underlyingVaultSharesBefore = await vault.underlyingVaultShares();
 
+      const coverId = await cover.coverId();
+
       const depeggedTokens = await vault.underlyingVaultShares();
-      await expect(vault.connect(user1).redeemCover(1, 0, depeggedTokens, [])).to.not.be.reverted;
+
+      const incidentId = 1;
+      const segmentId = 0;
+      await expect(vault.connect(user1).redeemCover(incidentId, segmentId, depeggedTokens, []))
+        .to.emit(vault, "CoverRedeemed")
+        .withArgs(user1.address, coverId, incidentId, segmentId, depeggedTokens, payoutAmount);
 
       const underlyingAssetAfter = await underlyingAsset.balanceOf(vault.address);
       const underlyingVaultAfter = await underlyingVault.balanceOf(vault.address);

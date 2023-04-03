@@ -1404,5 +1404,22 @@ describe("CoveredVault", function () {
       const owner = await coverNFT.ownerOf(coverId1);
       expect(owner).to.be.eq(vault.address);
     });
+
+    it("Should emit CoverBought event", async function () {
+      const { coverManager, vault } = await loadFixture(deployVaultFixture);
+
+      const [, , , admin] = await ethers.getSigners();
+
+      const amount = parseEther("100");
+
+      await coverManager.connect(admin).addToAllowList(vault.address);
+      await coverManager.connect(admin).depositETHOnBehalf(vault.address, { value: amount });
+
+      const expectedCoverId = 1;
+      const period = 100;
+      await expect(vault.connect(admin).buyCover(amount, period, amount.div(10), []))
+        .to.emit(vault, "CoverBought")
+        .withArgs(admin.address, expectedCoverId, amount, period);
+    });
   });
 });

@@ -90,6 +90,23 @@ contract CoveredVault is SafeERC4626, FeeManager {
   /* ========== Events ========== */
 
   /**
+   * @dev Emitted when a cover is purchased
+   */
+  event CoverBought(address caller, uint256 coverId, uint256 amount, uint256 period);
+
+  /**
+   * @dev Emitted when a cover is redeemed
+   */
+  event CoverRedeemed(
+    address caller,
+    uint256 coverId,
+    uint256 incidentId,
+    uint256 segmentId,
+    uint256 depeggedTokens,
+    uint256 payoutAmount
+  );
+
+  /**
    * @dev Emitted when assets are invested into the underlying vault
    */
   event Invested(uint256 amount, uint256 shares, address sender);
@@ -107,7 +124,12 @@ contract CoveredVault is SafeERC4626, FeeManager {
   /**
    * @dev Emitted when the underlying vault rate threshold is updated
    */
-  event RateThresholdUpdated(uint256 newRate);
+  event RateThresholdUpdated(uint256 newThreshold);
+
+  /**
+   * @dev Emitted when the latest underlying vault rate is updated
+   */
+  event UnderlyingVaultRateUpdated(uint256 newRate);
 
   /* ========== Custom Errors ========== */
 
@@ -443,7 +465,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
   /* ========== Admin/Operator Cover methods ========== */
 
   /**
-   * @dev Purchase cover for the assets.
+   * @dev Purchase cover for the assets. Can be called multiple times to update it as needed.
    * This contract will be the owner of the NFT representing the cover
    * @param _amount amount of assets to be covered
    * @param _period period of time for the cover. Min valid period in Nexus is 28 days
@@ -488,6 +510,8 @@ contract CoveredVault is SafeERC4626, FeeManager {
     if (coverId != newCoverId) {
       coverId = newCoverId;
     }
+
+    emit CoverBought(msg.sender, newCoverId, _amount, _period);
   }
 
   /**
@@ -519,6 +543,8 @@ contract CoveredVault is SafeERC4626, FeeManager {
 
     underlyingVaultShares -= _depeggedTokens;
     idleAssets += payoutAmount;
+
+    emit CoverRedeemed(msg.sender, coverId, _incidentId, _segmentId, _depeggedTokens, payoutAmount);
   }
 
   /**
@@ -706,6 +732,8 @@ contract CoveredVault is SafeERC4626, FeeManager {
 
     if (_newRate != latestUvRate) {
       latestUvRate = _newRate;
+
+      emit UnderlyingVaultRateUpdated(_newRate);
     }
   }
 
