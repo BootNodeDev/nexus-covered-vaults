@@ -1,151 +1,219 @@
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { deployVaultAssetFixture, deployVaultFixture } from "./utils/fixtures";
+import { deployScenariosFixture } from "./utils/fixtures";
+import { daysToSeconds, deposit } from "./utils/utils";
 
-// TODO Fix .mul(3)
-describe.only("Scenarios", function () {
-  describe("Base", function () {
-    it("Should return amount of shares after yield", async function () {
-      const { underlyingAsset, vault, underlyingVault } = await loadFixture(deployVaultFixture);
-      const [userA, userB, userC, admin, bot] = await ethers.getSigners();
+const { parseEther } = ethers.utils;
 
-      // User A deposits 1000 DAI and gets 1000 shares
-      const userAAmount = ethers.utils.parseEther("1000");
-      await underlyingAsset.mint(userA.address, userAAmount);
-      await underlyingAsset.connect(userA).approve(vault.address, userAAmount.mul(3));
-      await vault.connect(userA)["deposit(uint256,address)"](userAAmount, userA.address);
-      const userAShares = await vault.balanceOf(userA.address);
-      expect(userAShares).to.be.eq(userAAmount);
+describe("scenarios", function () {
+  it("Multiples users deposits, invest, no incidents, everyone redeems all", async function () {
+    const { underlyingAsset, vault, underlyingVault } = await loadFixture(deployScenariosFixture);
+    const [user1, user2, user3, admin] = await ethers.getSigners();
 
-      // User B deposits 2000 DAI and gets 2000 shares
-      const userBAmount = ethers.utils.parseEther("2000");
-      await underlyingAsset.mint(userB.address, userBAmount);
-      await underlyingAsset.connect(userB).approve(vault.address, userBAmount.mul(3));
-      await vault.connect(userB)["deposit(uint256,address)"](userBAmount, userB.address);
-      const userBShares = await vault.balanceOf(userB.address);
-      expect(userBShares).to.be.eq(userBAmount);
+    // User 1 deposits 1000 DAI and gets 1000 shares
+    const user1Amount = parseEther("1000");
+    const user1Shares = await deposit(user1Amount, user1, underlyingAsset, vault);
+    expect(user1Shares).to.equal(parseEther("1000"));
 
-      // 100% of funds deployed to underlying vault
-      const operatorRole = await vault.OPERATOR_ROLE();
-      await vault.connect(admin).grantRole(operatorRole, bot.address);
-      await vault.connect(bot).invest(userAAmount.add(userBAmount));
-      const investedAssets = await underlyingAsset.balanceOf(underlyingVault.address);
-      expect(investedAssets).to.be.eq(userAAmount.add(userBAmount)); // 3000
+    // User 2 deposits 2000 DAI and gets 2000 shares
+    const user2Amount = parseEther("2000");
+    const user2Shares = await deposit(user2Amount, user2, underlyingAsset, vault);
+    expect(user2Shares).to.equal(parseEther("2000"));
 
-      // Yield generated
-      const yieldAmount1 = ethers.utils.parseEther("100");
-      await underlyingAsset.mint(underlyingVault.address, yieldAmount1);
+    const idleAssets = await vault.idleAssets();
 
-      // User A withdraws 1000 shares
-      await vault.connect(userA)["withdraw(uint256,address,address)"](userAAmount, userA.address, userA.address);
+    // Buy cover
+    await vault.connect(admin).buyCover(idleAssets, daysToSeconds(90), idleAssets.div(10), []);
 
-      // Yield generated
-      const yieldAmount2 = ethers.utils.parseEther("33");
-      await underlyingAsset.mint(underlyingVault.address, yieldAmount2);
+    // 100% of funds deployed to underlying vault
+    await vault.connect(admin).invest(idleAssets);
+    const investedAssets = await underlyingAsset.balanceOf(underlyingVault.address);
+    expect(investedAssets).to.be.eq(user1Amount.add(user2Amount)); // 3000
 
-      // User C deposits 500 DAI and gets 476 shares
-      const userCAmount = ethers.utils.parseEther("500");
-      const expectedWithdrawLowerBound = ethers.utils.parseEther("476");
-      const expectedWithdrawUpperBound = ethers.utils.parseEther("477");
+    // Yield generated
+    const yieldAmount1 = parseEther("100");
+    await underlyingAsset.mint(underlyingVault.address, yieldAmount1);
 
-      await underlyingAsset.mint(userC.address, userCAmount);
-      await underlyingAsset.connect(userC).approve(vault.address, ethers.utils.parseEther("100000000000"));
-      await vault.connect(userC)["deposit(uint256,address)"](userCAmount, userC.address);
-      const userCShares = await vault.balanceOf(userC.address);
-      expect(userCShares).to.be.gt(expectedWithdrawLowerBound).and.be.lt(expectedWithdrawUpperBound);
+    // User 1 redeems 1000 shares
+    await vault.connect(user1)["redeem(uint256,address,address)"](user1Shares, user1.address, user1.address);
+    {
+      const user1SharesAfter = await vault.balanceOf(user1.address);
+      const user1AssetsAfter = await underlyingAsset.balanceOf(user1.address);
+      expect(user1SharesAfter).to.equal(0);
+      expect(user1AssetsAfter).to.be.gt(parseEther("1033")).and.be.lt(parseEther("1034"));
+    }
 
-      // User B withdraw 1000 shares
+    // Yield generated
+    const yieldAmount2 = parseEther("33");
+    await underlyingAsset.mint(underlyingVault.address, yieldAmount2);
 
-      // Yield generated
-      const yieldAmount3 = ethers.utils.parseEther("50");
-      await underlyingAsset.mint(underlyingVault.address, yieldAmount3);
+    // User 3 deposits 500 DAI and gets 476 shares
+    const user3Amount = parseEther("500");
+    const user3Shares = await deposit(user3Amount, user3, underlyingAsset, vault);
+    expect(user3Shares).to.be.gt(parseEther("476")).and.be.lt(parseEther("477"));
 
-      // User C withdraw 476 shares
-      const withdrawUserC = ethers.utils.parseEther("476");
-      await vault.connect(userC)["withdraw(uint256,address,address)"](withdrawUserC, userC.address, userC.address);
+    // User 2 withdraw 1000 shares
+    await vault.connect(user2)["redeem(uint256,address,address)"](user2Shares.div(2), user2.address, user2.address);
+    {
+      const user2SharesAfter = await vault.balanceOf(user2.address);
+      const user2AssetsAfter = await underlyingAsset.balanceOf(user2.address);
+      expect(user2SharesAfter).to.equal(parseEther("1000"));
+      expect(user2AssetsAfter).to.be.gt(parseEther("1049")).and.be.lt(parseEther("1050"));
+    }
 
-      // user B withdraw 1000 shares
-      const withdrawUserB = ethers.utils.parseEther("1000");
-      await vault.connect(userB)["withdraw(uint256,address,address)"](withdrawUserB, userB.address, userB.address);
-    });
+    // Yield generated
+    const yieldAmount3 = parseEther("50");
+    await underlyingAsset.mint(underlyingVault.address, yieldAmount3);
+
+    // User 3 withdraw 476 shares
+    await vault.connect(user3)["redeem(uint256,address,address)"](user3Shares, user3.address, user3.address);
+    {
+      const user3SharesAfter = await vault.balanceOf(user3.address);
+      const user3AssetsAfter = await underlyingAsset.balanceOf(user3.address);
+      expect(user3SharesAfter).to.equal(0);
+      expect(user3AssetsAfter).to.be.gt(parseEther("516")).and.be.lt(parseEther("517"));
+    }
+
+    // user 2 withdraw 1000 shares
+    await vault.connect(user2)["redeem(uint256,address,address)"](user2Shares.div(2), user2.address, user2.address);
+    {
+      const user2SharesAfter = await vault.balanceOf(user2.address);
+      const user2AssetsAfter = await underlyingAsset.balanceOf(user2.address);
+      expect(user2SharesAfter).to.equal(0);
+      expect(user2AssetsAfter).to.be.gt(parseEther("2133")).and.be.lt(parseEther("2134"));
+    }
   });
 
-  describe("Base + Cover", function () {
-    it("Should rebalance cover and be able to withdraw all funds", async function () {
-      const { coverManager, underlyingAsset, vault, underlyingVault } = await loadFixture(deployVaultAssetFixture);
-      const [userA, userB, userC, admin, bot] = await ethers.getSigners();
+  it("Multiples users deposits, invest, incident happens, cover paid, everyone redeems all", async function () {
+    const { underlyingAsset, vault, underlyingVault, yieldTokenIncidents } = await loadFixture(deployScenariosFixture);
+    const [user1, user2, user3, admin] = await ethers.getSigners();
 
-      // User A deposits 1000 DAI and gets 1000 shares
-      const userAAmount = ethers.utils.parseEther("1000");
-      await underlyingAsset.mint(userA.address, userAAmount);
-      await underlyingAsset.connect(userA).approve(vault.address, userAAmount.mul(3));
-      await vault.connect(userA)["deposit(uint256,address)"](userAAmount, userA.address);
-      const userAShares = await vault.balanceOf(userA.address);
-      expect(userAShares).to.be.eq(userAAmount);
+    // User 1 deposits 1000 DAI and gets 1000 shares
+    const user1Amount = parseEther("1000");
+    const user1Shares = await deposit(user1Amount, user1, underlyingAsset, vault);
+    expect(user1Shares).to.equal(parseEther("1000"));
 
-      // User B deposits 2000 DAI and gets 2000 shares
-      const userBAmount = ethers.utils.parseEther("2000");
-      await underlyingAsset.mint(userB.address, userBAmount);
-      await underlyingAsset.connect(userB).approve(vault.address, userBAmount.mul(3));
-      await vault.connect(userB)["deposit(uint256,address)"](userBAmount, userB.address);
-      const userBShares = await vault.balanceOf(userB.address);
-      expect(userBShares).to.be.eq(userBAmount);
+    // User 2 deposits 2000 DAI and gets 2000 shares
+    const user2Amount = parseEther("2000");
+    const user2Shares = await deposit(user2Amount, user2, underlyingAsset, vault);
+    expect(user2Shares).to.equal(parseEther("2000"));
 
-      // 100% of funds deployed to underlying vault
-      const totalDeployed = userAAmount.add(userBAmount);
-      const operatorRole = await vault.OPERATOR_ROLE();
-      await vault.connect(admin).grantRole(operatorRole, bot.address);
-      await vault.connect(bot).invest(totalDeployed);
-      const investedAssets = await underlyingAsset.balanceOf(underlyingVault.address);
-      expect(investedAssets).to.be.eq(totalDeployed); // 3000
+    // User 3 deposits 2000 DAI and gets 2000 shares
+    const user3Amount = parseEther("500");
+    const user3Shares = await deposit(user3Amount, user3, underlyingAsset, vault);
+    expect(user3Shares).to.equal(parseEther("500"));
 
-      // buyCover
-      const premium = ethers.utils.parseEther("30");
-      await coverManager.connect(admin).addToAllowList(vault.address);
-      await underlyingAsset.mint(admin.address, premium.mul(20));
-      await underlyingAsset.connect(admin).approve(coverManager.address, premium);
-      await coverManager.connect(admin).depositOnBehalf(underlyingAsset.address, premium, vault.address);
-      await vault.connect(admin).buyCover(totalDeployed, 90, premium, []);
+    const idleAssets = await vault.idleAssets();
 
-      // Yield generated
-      const yieldAmount1 = ethers.utils.parseEther("100");
-      await underlyingAsset.mint(underlyingVault.address, yieldAmount1);
+    // Buy cover
+    await vault.connect(admin).buyCover(idleAssets, daysToSeconds(90), idleAssets.div(10), []);
 
-      // TODO Cover Update past 30 days. Rebalance days.
+    // 100% of funds deployed to underlying vault
+    await vault.connect(admin).invest(idleAssets);
+    const investedAssets = await underlyingAsset.balanceOf(underlyingVault.address);
+    expect(investedAssets).to.be.eq(user1Amount.add(user2Amount).add(user3Amount)); // 3500
 
-      // User A withdraws 1000 shares
-      await vault.connect(userA)["withdraw(uint256,address,address)"](userAAmount, userA.address, userA.address);
+    // Incident happens - 100% loss
+    await underlyingAsset.burn(underlyingVault.address, investedAssets);
 
-      // Yield generated
-      const yieldAmount2 = ethers.utils.parseEther("33");
-      await underlyingAsset.mint(underlyingVault.address, yieldAmount2);
+    // Redeem Cover
+    await yieldTokenIncidents.setPayoutAmount(
+      investedAssets.mul(9).div(10),
+      underlyingVault.address,
+      underlyingAsset.address,
+    );
+    const deppegedTokens = await vault.underlyingVaultShares();
+    await vault.redeemCover(0, 0, deppegedTokens, []);
 
-      // User C deposits 500 DAI and gets 476 shares
-      const userCAmount = ethers.utils.parseEther("500");
-      const expectedWithdrawLowerBound = ethers.utils.parseEther("476");
-      const expectedWithdrawUpperBound = ethers.utils.parseEther("477");
+    // User 1 redeems 1000 shares
+    await vault.connect(user1)["redeem(uint256,address,address)"](user1Shares, user1.address, user1.address);
+    {
+      const user1SharesAfter = await vault.balanceOf(user1.address);
+      const user1AssetsAfter = await underlyingAsset.balanceOf(user1.address);
+      expect(user1SharesAfter).to.equal(0);
+      expect(user1AssetsAfter).to.equal(user1Amount.mul(9).div(10));
+    }
+    console.log("2");
 
-      await underlyingAsset.mint(userC.address, userCAmount);
-      await underlyingAsset.connect(userC).approve(vault.address, ethers.utils.parseEther("100000000000"));
-      await vault.connect(userC)["deposit(uint256,address)"](userCAmount, userC.address);
-      const userCShares = await vault.balanceOf(userC.address);
-      expect(userCShares).to.be.gt(expectedWithdrawLowerBound).and.be.lt(expectedWithdrawUpperBound);
+    // user 2 withdraw 2000 shares
+    await vault.connect(user2)["redeem(uint256,address,address)"](user2Shares, user2.address, user2.address);
+    {
+      const user2SharesAfter = await vault.balanceOf(user2.address);
+      const user2AssetsAfter = await underlyingAsset.balanceOf(user2.address);
+      expect(user2SharesAfter).to.equal(0);
+      expect(user2AssetsAfter).to.equal(user2Amount.mul(9).div(10));
+    }
 
-      // Yield generated
-      const yieldAmount3 = ethers.utils.parseEther("50");
-      await underlyingAsset.mint(underlyingVault.address, yieldAmount3);
+    // User 3 withdraw 500 shares
+    await vault.connect(user3)["redeem(uint256,address,address)"](user3Shares, user3.address, user3.address);
+    {
+      const user3SharesAfter = await vault.balanceOf(user3.address);
+      const user3AssetsAfter = await underlyingAsset.balanceOf(user3.address);
+      expect(user3SharesAfter).to.equal(0);
+      expect(user3AssetsAfter).to.equal(user3Amount.mul(9).div(10));
+    }
+  });
 
-      // User C withdraw 476 shares
-      const withdrawUserC = ethers.utils.parseEther("476");
-      await vault.connect(userC)["withdraw(uint256,address,address)"](withdrawUserC, userC.address, userC.address);
+  it("Multiples users deposits, invest, incident happens, cover not redeemed, everyone redeems all", async function () {
+    const { underlyingAsset, vault, underlyingVault } = await loadFixture(deployScenariosFixture);
+    const [user1, user2, user3, admin] = await ethers.getSigners();
 
-      // user B withdraw 1000 shares
-      const withdrawUserB = ethers.utils.parseEther("1000");
-      await vault.connect(userB)["withdraw(uint256,address,address)"](withdrawUserB, userB.address, userB.address);
+    // User 1 deposits 1000 DAI and gets 1000 shares
+    const user1Amount = parseEther("1000");
+    const user1Shares = await deposit(user1Amount, user1, underlyingAsset, vault);
+    expect(user1Shares).to.equal(parseEther("1000"));
 
-      // TODO Operator withdraw all the shares
-      await vault.connect(admin).withdrawCoverManagerAssets(vault.address, ethers.utils.parseEther("1"), userA.address);
-    });
+    // User 2 deposits 2000 DAI and gets 2000 shares
+    const user2Amount = parseEther("2000");
+    const user2Shares = await deposit(user2Amount, user2, underlyingAsset, vault);
+    expect(user2Shares).to.equal(parseEther("2000"));
+
+    // User 3 deposits 2000 DAI and gets 2000 shares
+    const user3Amount = parseEther("500");
+    const user3Shares = await deposit(user3Amount, user3, underlyingAsset, vault);
+    expect(user3Shares).to.equal(parseEther("500"));
+
+    const idleAssets = await vault.idleAssets();
+
+    // Buy cover
+    await vault.connect(admin).buyCover(idleAssets, daysToSeconds(90), idleAssets.div(10), []);
+
+    // 100% of funds deployed to underlying vault
+    await vault.connect(admin).invest(idleAssets);
+    const investedAssets = await underlyingAsset.balanceOf(underlyingVault.address);
+    expect(investedAssets).to.be.eq(user1Amount.add(user2Amount).add(user3Amount)); // 3500
+
+    // Incident happens - 50% loss
+    await underlyingAsset.burn(underlyingVault.address, investedAssets.div(2));
+
+    // Redeem can't be done as assets were not covered or Nexus decided not to pay or whatever other situation
+
+    // User 1 redeems 1000 shares
+    await vault.connect(user1)["redeem(uint256,address,address)"](user1Shares, user1.address, user1.address);
+    {
+      const user1SharesAfter = await vault.balanceOf(user1.address);
+      const user1AssetsAfter = await underlyingAsset.balanceOf(user1.address);
+      expect(user1SharesAfter).to.equal(0);
+      expect(user1AssetsAfter).to.equal(user1Amount.div(2));
+    }
+
+    // user 2 withdraw 2000 shares
+    await vault.connect(user2)["redeem(uint256,address,address)"](user2Shares, user2.address, user2.address);
+    {
+      const user2SharesAfter = await vault.balanceOf(user2.address);
+      const user2AssetsAfter = await underlyingAsset.balanceOf(user2.address);
+      expect(user2SharesAfter).to.equal(0);
+      expect(user2AssetsAfter).to.equal(user2Amount.div(2));
+    }
+
+    // User 3 withdraw 500 shares
+    await vault.connect(user3)["redeem(uint256,address,address)"](user3Shares, user3.address, user3.address);
+    {
+      const user3SharesAfter = await vault.balanceOf(user3.address);
+      const user3AssetsAfter = await underlyingAsset.balanceOf(user3.address);
+      expect(user3SharesAfter).to.equal(0);
+      expect(user3AssetsAfter).to.equal(user3Amount.div(2));
+    }
   });
 });

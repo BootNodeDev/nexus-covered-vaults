@@ -1,9 +1,8 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import { increase } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
-
 import { CoveredVaultFactory, CoverManager, ERC4626Mock } from "../../typechain-types";
+import { calculateCurrentTrancheId, createAccount, daysToSeconds } from "../utils/utils";
 
 const { parseEther } = ethers.utils;
 const { MaxUint256, AddressZero } = ethers.constants;
@@ -19,19 +18,6 @@ const nexusV2Addresses = {
   nxm: "0xd7c49cee7e9188cca6ad8ff264c1da2e69d4cf3b",
 };
 const accounts = ["0x0000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000001"];
-
-const createAccount = async (account: string) => {
-  const acc = await ethers.getImpersonatedSigner(account);
-  await setBalance(account, parseEther("100"));
-  return acc;
-};
-
-const calculateCurrentTrancheId = async () => {
-  const lastBlock = await ethers.provider.getBlock("latest");
-  return Math.floor(lastBlock.timestamp / (91 * 24 * 3600));
-};
-
-const daysToSeconds = (days: number) => days * 24 * 60 * 60;
 
 describe("Integration tests", function () {
   this.timeout(0);
