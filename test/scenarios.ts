@@ -27,8 +27,8 @@ describe("Scenarios", function () {
       expect(userBShares).to.be.eq(userBAmount);
 
       // 100% of funds deployed to underlying vault
-      const botRole = await vault.BOT_ROLE();
-      await vault.connect(admin).grantRole(botRole, bot.address);
+      const operatorRole = await vault.OPERATOR_ROLE();
+      await vault.connect(admin).grantRole(operatorRole, bot.address);
       await vault.connect(bot).invest(userAAmount.add(userBAmount));
       const investedAssets = await underlyingAsset.balanceOf(underlyingVault.address);
       expect(investedAssets).to.be.eq(userAAmount.add(userBAmount)); // 3000
@@ -94,8 +94,8 @@ describe("Scenarios", function () {
 
       // 100% of funds deployed to underlying vault
       const totalDeployed = userAAmount.add(userBAmount);
-      const botRole = await vault.BOT_ROLE();
-      await vault.connect(admin).grantRole(botRole, bot.address);
+      const operatorRole = await vault.OPERATOR_ROLE();
+      await vault.connect(admin).grantRole(operatorRole, bot.address);
       await vault.connect(bot).invest(totalDeployed);
       const investedAssets = await underlyingAsset.balanceOf(underlyingVault.address);
       expect(investedAssets).to.be.eq(totalDeployed); // 3000
