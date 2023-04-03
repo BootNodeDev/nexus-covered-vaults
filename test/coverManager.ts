@@ -49,7 +49,7 @@ describe("CoverManager", function () {
       const { cover, coverManager, yieldTokenIncidents } = await loadFixture(deployVaultFixture);
 
       expect(await coverManager.cover()).to.equal(cover.address);
-      expect(await coverManager.yieldTokenIncident()).to.equal(yieldTokenIncidents.address);
+      expect(await coverManager.yieldTokenIncidents()).to.equal(yieldTokenIncidents.address);
     });
   });
 

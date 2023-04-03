@@ -40,7 +40,7 @@ contract CoverManager is Ownable, ReentrancyGuard, ICoverManager {
   /**
    * @dev Address Nexus YieldTokenIncidents contract
    */
-  address public immutable yieldTokenIncident;
+  address public immutable yieldTokenIncidents;
 
   /**
    * @dev Address Nexus pool contract
@@ -101,12 +101,12 @@ contract CoverManager is Ownable, ReentrancyGuard, ICoverManager {
   /**
    * @dev Initializes the main admin role
    * @param _cover Address of the Cover contract
-   * @param _yieldTokenIncident Address of the YieldTokenIncident contract
+   * @param _yieldTokenIncidents Address of the YieldTokenIncident contract
    * @param _pool Address of the pool contract
    */
-  constructor(address _cover, address _yieldTokenIncident, address _pool) {
+  constructor(address _cover, address _yieldTokenIncidents, address _pool) {
     cover = _cover;
-    yieldTokenIncident = _yieldTokenIncident;
+    yieldTokenIncidents = _yieldTokenIncidents;
     pool = _pool;
   }
 
@@ -206,9 +206,9 @@ contract CoverManager is Ownable, ReentrancyGuard, ICoverManager {
 
     IERC20(yieldTokenAddress).safeTransferFrom(msg.sender, address(this), _depeggedTokens);
 
-    IERC20(yieldTokenAddress).approve(yieldTokenIncident, _depeggedTokens);
+    IERC20(yieldTokenAddress).approve(yieldTokenIncidents, _depeggedTokens);
 
-    (uint256 payoutAmount, uint8 coverAsset) = IYieldTokenIncidents(yieldTokenIncident).redeemPayout(
+    (uint256 payoutAmount, uint8 coverAsset) = IYieldTokenIncidents(yieldTokenIncidents).redeemPayout(
       _incidentId,
       _coverId,
       _segmentId,
