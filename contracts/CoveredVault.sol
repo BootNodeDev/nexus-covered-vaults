@@ -12,7 +12,7 @@ import { SafeERC4626 } from "./vault/SafeERC4626.sol";
 
 /**
  * @title CoveredVault
- * @dev An ERC-4626 vault that invest the assets in an underlying ERC-4626 vault. Invested funds are protected by
+ * @dev An ERC-4626 vault that invest the assets in an underlying ERC-4626 vault. Invested assets are protected by
  * purchasing coverage on Nexus Mutual.
  */
 contract CoveredVault is SafeERC4626, FeeManager {
@@ -525,7 +525,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
    * @dev Allows to withdraw deposited assets in cover manager
    * @param _asset asset address to withdraw
    * @param _amount amount to withdraw
-   * @param _to address to send withdrawn funds
+   * @param _to address to send withdrawn assets
    */
   function withdrawCoverManagerAssets(
     address _asset,

@@ -156,11 +156,11 @@ describe("CoverManager", function () {
       const premium = await cover.premium();
       const PREMIUM_DENOMINATOR = await cover.PREMIUM_DENOMINATOR();
       const amountToPay = buyCoverParams.amount.mul(premium).div(PREMIUM_DENOMINATOR);
-      const fundsBefore = await coverManager.funds(underlyingAsset.address, user1.address);
+      const fundsBefore = await coverManager.deposits(underlyingAsset.address, user1.address);
       await coverManager
         .connect(user1)
         .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 1 }, [poolAlloc]);
-      const fundsAfter = await coverManager.funds(underlyingAsset.address, user1.address);
+      const fundsAfter = await coverManager.deposits(underlyingAsset.address, user1.address);
 
       expect(fundsAfter).to.be.eq(fundsBefore.sub(amountToPay));
     });
@@ -358,13 +358,13 @@ describe("CoverManager", function () {
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("1000"));
       await underlyingAsset.connect(user1).approve(coverManager.address, ethers.utils.parseEther("1000"));
 
-      const fundsBefore = await coverManager.funds(underlyingAsset.address, user1.address);
+      const fundsBefore = await coverManager.deposits(underlyingAsset.address, user1.address);
       const cmBalanceBefore = await underlyingAsset.balanceOf(coverManager.address);
       const user1BalanceBefore = await underlyingAsset.balanceOf(user1.address);
 
       await coverManager.connect(user1).depositOnBehalf(underlyingAsset.address, buyCoverParams.amount, user1.address);
 
-      const fundsAfter = await coverManager.funds(underlyingAsset.address, user1.address);
+      const fundsAfter = await coverManager.deposits(underlyingAsset.address, user1.address);
       const cmBalanceAfter = await underlyingAsset.balanceOf(coverManager.address);
       const user1BalanceAfter = await underlyingAsset.balanceOf(user1.address);
 
@@ -412,7 +412,7 @@ describe("CoverManager", function () {
 
       const ETH_ADDRESS = await coverManager.ETH_ADDRESS();
 
-      const fundsBefore = await coverManager.funds(ETH_ADDRESS, user1.address);
+      const fundsBefore = await coverManager.deposits(ETH_ADDRESS, user1.address);
       const cmBalanceBefore = await ethers.provider.getBalance(coverManager.address);
       const user1BalanceBefore = await ethers.provider.getBalance(user1.address);
 
@@ -421,7 +421,7 @@ describe("CoverManager", function () {
         .connect(user1)
         .depositETHOnBehalf(user1.address, { value: buyCoverParams.amount, gasPrice: 0 });
 
-      const fundsAfter = await coverManager.funds(ETH_ADDRESS, user1.address);
+      const fundsAfter = await coverManager.deposits(ETH_ADDRESS, user1.address);
       const cmBalanceAfter = await ethers.provider.getBalance(coverManager.address);
       const user1BalanceAfter = await ethers.provider.getBalance(user1.address);
 
@@ -454,14 +454,14 @@ describe("CoverManager", function () {
         .connect(user1)
         .depositETHOnBehalf(user1.address, { value: buyCoverParams.amount, gasPrice: 0 });
 
-      const fundsBefore = await coverManager.funds(ETH_ADDRESS, user1.address);
+      const fundsBefore = await coverManager.deposits(ETH_ADDRESS, user1.address);
       const cmBalanceBefore = await ethers.provider.getBalance(coverManager.address);
       const user1BalanceBefore = await ethers.provider.getBalance(user1.address);
 
       await setNextBlockBaseFeePerGas(0);
       await coverManager.connect(user1).withdraw(ETH_ADDRESS, buyCoverParams.amount, user1.address, { gasPrice: 0 });
 
-      const fundsAfter = await coverManager.funds(ETH_ADDRESS, user1.address);
+      const fundsAfter = await coverManager.deposits(ETH_ADDRESS, user1.address);
       const cmBalanceAfter = await ethers.provider.getBalance(coverManager.address);
       const user1BalanceAfter = await ethers.provider.getBalance(user1.address);
 
@@ -479,13 +479,13 @@ describe("CoverManager", function () {
 
       await coverManager.connect(user1).depositOnBehalf(underlyingAsset.address, buyCoverParams.amount, user1.address);
 
-      const fundsBefore = await coverManager.funds(underlyingAsset.address, user1.address);
+      const fundsBefore = await coverManager.deposits(underlyingAsset.address, user1.address);
       const cmBalanceBefore = await underlyingAsset.balanceOf(coverManager.address);
       const user1BalanceBefore = await underlyingAsset.balanceOf(user1.address);
 
       await coverManager.connect(user1).withdraw(underlyingAsset.address, buyCoverParams.amount, user1.address);
 
-      const fundsAfter = await coverManager.funds(underlyingAsset.address, user1.address);
+      const fundsAfter = await coverManager.deposits(underlyingAsset.address, user1.address);
       const cmBalanceAfter = await underlyingAsset.balanceOf(coverManager.address);
       const user1BalanceAfter = await underlyingAsset.balanceOf(user1.address);
 

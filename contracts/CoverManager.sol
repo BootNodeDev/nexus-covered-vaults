@@ -55,7 +55,7 @@ contract CoverManager is Ownable, ReentrancyGuard, ICoverManager {
   /**
    * @dev Stores the user deposits to be used for purchasing cover
    */
-  mapping(address => mapping(address => uint256)) public funds;
+  mapping(address => mapping(address => uint256)) public deposits;
 
   /* ========== Events ========== */
 
@@ -123,7 +123,7 @@ contract CoverManager is Ownable, ReentrancyGuard, ICoverManager {
     if (_to != msg.sender && allowList[_to] == false) revert CoverManager_DepositNotAllowed();
 
     IERC20(_asset).safeTransferFrom(msg.sender, address(this), _amount);
-    funds[_asset][_to] += _amount;
+    deposits[_asset][_to] += _amount;
 
     emit Deposit(msg.sender, _to, _asset, _amount);
   }
@@ -136,7 +136,7 @@ contract CoverManager is Ownable, ReentrancyGuard, ICoverManager {
     // Validate _to to avoid depositing assets for an asset that can't use this contract
     if (_to != msg.sender && allowList[_to] == false) revert CoverManager_DepositNotAllowed();
 
-    funds[ETH_ADDRESS][_to] += msg.value;
+    deposits[ETH_ADDRESS][_to] += msg.value;
 
     emit Deposit(msg.sender, _to, ETH_ADDRESS, msg.value);
   }
@@ -145,10 +145,10 @@ contract CoverManager is Ownable, ReentrancyGuard, ICoverManager {
    * @dev Allows to withdraw deposited assets
    * @param _asset asset address to withdraw
    * @param _amount amount to withdraw
-   * @param _to address to send withdrawn funds
+   * @param _to address to send withdrawn assets
    */
   function withdraw(address _asset, uint256 _amount, address _to) external nonReentrant {
-    funds[_asset][msg.sender] -= _amount;
+    deposits[_asset][msg.sender] -= _amount;
 
     if (_asset == ETH_ADDRESS) {
       // solhint-disable-next-line avoid-low-level-calls
@@ -289,7 +289,7 @@ contract CoverManager is Ownable, ReentrancyGuard, ICoverManager {
   ) internal returns (uint256) {
     address asset = IPool(pool).getAsset(_params.paymentAsset).assetAddress;
 
-    if (funds[asset][msg.sender] < _params.maxPremiumInAsset) revert CoverManager_InsufficientFunds();
+    if (deposits[asset][msg.sender] < _params.maxPremiumInAsset) revert CoverManager_InsufficientFunds();
 
     IERC20(asset).safeApprove(cover, _params.maxPremiumInAsset);
 
@@ -301,7 +301,7 @@ contract CoverManager is Ownable, ReentrancyGuard, ICoverManager {
     IERC20(asset).safeApprove(cover, 0);
 
     uint256 spent = initialBalance - finalBalance;
-    funds[asset][msg.sender] -= spent;
+    deposits[asset][msg.sender] -= spent;
 
     return coverId;
   }
@@ -316,14 +316,14 @@ contract CoverManager is Ownable, ReentrancyGuard, ICoverManager {
     BuyCoverParams calldata _params,
     PoolAllocationRequest[] calldata _coverChunkRequests
   ) internal returns (uint256) {
-    if (funds[ETH_ADDRESS][msg.sender] < _params.maxPremiumInAsset) revert CoverManager_InsufficientFunds();
+    if (deposits[ETH_ADDRESS][msg.sender] < _params.maxPremiumInAsset) revert CoverManager_InsufficientFunds();
 
     uint256 initialBalance = address(this).balance;
     uint256 coverId = ICover(cover).buyCover{ value: _params.amount }(_params, _coverChunkRequests);
     uint256 finalBalance = address(this).balance;
 
     uint256 spent = initialBalance - finalBalance;
-    funds[ETH_ADDRESS][msg.sender] -= spent;
+    deposits[ETH_ADDRESS][msg.sender] -= spent;
 
     return coverId;
   }
