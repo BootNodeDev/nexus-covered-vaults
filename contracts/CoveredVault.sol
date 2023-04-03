@@ -111,16 +111,16 @@ contract CoveredVault is SafeERC4626, FeeManager {
 
   /* ========== Custom Errors ========== */
 
-  error CoveredVault__DepositMoreThanMax();
-  error CoveredVault__MintMoreThanMax();
-  error CoveredVault__WithdrawMoreThanMax();
-  error CoveredVault__RedeemMoreThanMax();
-  error CoveredVault__SendingETHFailed();
-  error CoveredVault__InvalidWithdrawAddress();
-  error CoveredVault__InvalidBuyCoverAmount();
-  error CoveredVault__InvestExceedsCoverAmount();
-  error CoveredVault__UnderlyingVaultBadRate();
-  error CoveredVault__RateThresholdOutOfBound();
+  error CoveredVault_DepositMoreThanMax();
+  error CoveredVault_MintMoreThanMax();
+  error CoveredVault_WithdrawMoreThanMax();
+  error CoveredVault_RedeemMoreThanMax();
+  error CoveredVault_SendingETHFailed();
+  error CoveredVault_InvalidWithdrawAddress();
+  error CoveredVault_InvalidBuyCoverAmount();
+  error CoveredVault_InvestExceedsCoverAmount();
+  error CoveredVault_UnderlyingVaultBadRate();
+  error CoveredVault_RateThresholdOutOfBound();
 
   /* ========== Constructor ========== */
 
@@ -151,7 +151,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
     uint256 _depositFee,
     uint256 _managementFee
   ) SafeERC4626(IERC20(_underlyingVault.asset()), _name, _symbol) FeeManager(_admin, _depositFee, _managementFee) {
-    if (_uvRateThreshold > RATE_THRESHOLD_DENOMINATOR) revert CoveredVault__RateThresholdOutOfBound();
+    if (_uvRateThreshold > RATE_THRESHOLD_DENOMINATOR) revert CoveredVault_RateThresholdOutOfBound();
 
     underlyingVault = _underlyingVault;
     maxAssetsLimit = _maxAssetsLimit;
@@ -345,7 +345,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
    */
   function deposit(uint256 _assets, address _receiver) public override whenNotPaused returns (uint256) {
     (uint256 maxAvailableDeposit, uint256 vaultTotalAssets, uint256 newUVRate) = _maxDeposit(_receiver);
-    if (_assets > maxAvailableDeposit) revert CoveredVault__DepositMoreThanMax();
+    if (_assets > maxAvailableDeposit) revert CoveredVault_DepositMoreThanMax();
 
     _validateUnderlyingVaultExchangeRate(newUVRate);
 
@@ -373,7 +373,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
    */
   function mint(uint256 _shares, address _receiver) public override whenNotPaused returns (uint256) {
     (uint256 maxAvailableMint, uint256 vaultTotalAssets, uint256 newUVRate) = _maxMint(_receiver);
-    if (_shares > maxAvailableMint) revert CoveredVault__MintMoreThanMax();
+    if (_shares > maxAvailableMint) revert CoveredVault_MintMoreThanMax();
 
     _validateUnderlyingVaultExchangeRate(newUVRate);
 
@@ -410,7 +410,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
     (uint256 vaultTotalAssets, uint256 newUVRate) = _totalAssets(true, false);
     uint256 userMaxWithdraw = _convertToAssets(balanceOf(_owner), Math.Rounding.Down, vaultTotalAssets);
 
-    if (_assets > userMaxWithdraw) revert CoveredVault__WithdrawMoreThanMax();
+    if (_assets > userMaxWithdraw) revert CoveredVault_WithdrawMoreThanMax();
 
     _validateUnderlyingVaultExchangeRate(newUVRate);
 
@@ -427,7 +427,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
    * @return Amount of underlying assets withdrawn
    */
   function redeem(uint256 _shares, address _receiver, address _owner) public override whenNotPaused returns (uint256) {
-    if (_shares > maxRedeem(_owner)) revert CoveredVault__RedeemMoreThanMax();
+    if (_shares > maxRedeem(_owner)) revert CoveredVault_RedeemMoreThanMax();
 
     _updateAssets();
 
@@ -466,7 +466,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
 
     // ensure already invested assets will remain covered
     uint256 investedAssets = _convertUnderlyingVaultShares(underlyingVaultShares, false);
-    if (_amount < investedAssets) revert CoveredVault__InvalidBuyCoverAmount();
+    if (_amount < investedAssets) revert CoveredVault_InvalidBuyCoverAmount();
 
     BuyCoverParams memory params = BuyCoverParams({
       coverId: coverIdParam,
@@ -532,7 +532,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
     uint256 _amount,
     address _to
   ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (_to == address(this)) revert CoveredVault__InvalidWithdrawAddress();
+    if (_to == address(this)) revert CoveredVault_InvalidWithdrawAddress();
 
     coverManager.withdraw(_asset, _amount, _to);
   }
@@ -550,7 +550,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
     uint256 investedAssets = _convertUnderlyingVaultShares(underlyingVaultShares - fee, false);
     uint96 coveredAmount = coverManager.getActiveCoverAmount(coverId);
 
-    if (investedAssets + _amount > coveredAmount) revert CoveredVault__InvestExceedsCoverAmount();
+    if (investedAssets + _amount > coveredAmount) revert CoveredVault_InvestExceedsCoverAmount();
 
     // deposit assets
     IERC20(asset()).approve(address(underlyingVault), _amount);
@@ -623,7 +623,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
    * @param _newThreshold new threshold value
    */
   function setUnderlyingVaultRateThreshold(uint256 _newThreshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (_newThreshold > RATE_THRESHOLD_DENOMINATOR) revert CoveredVault__RateThresholdOutOfBound();
+    if (_newThreshold > RATE_THRESHOLD_DENOMINATOR) revert CoveredVault_RateThresholdOutOfBound();
 
     uvRateThreshold = _newThreshold;
 
@@ -701,7 +701,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
     if (latestUvRate != 0 && _newRate < latestUvRate) {
       uint256 minNewRate = latestUvRate - (latestUvRate * uvRateThreshold) / RATE_THRESHOLD_DENOMINATOR;
 
-      if (_newRate < minNewRate) revert CoveredVault__UnderlyingVaultBadRate();
+      if (_newRate < minNewRate) revert CoveredVault_UnderlyingVaultBadRate();
     }
 
     if (_newRate != latestUvRate) {

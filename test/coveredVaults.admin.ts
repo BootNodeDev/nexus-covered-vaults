@@ -157,7 +157,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).invest(investAmount)).to.be.revertedWithCustomError(
         vault,
-        "CoveredVault__UnderlyingVaultBadRate",
+        "CoveredVault_UnderlyingVaultBadRate",
       );
 
       // set exchange rate threshold to 50%
@@ -190,7 +190,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).invest(investAmount)).to.be.revertedWithCustomError(
         vault,
-        "CoveredVault__InvestExceedsCoverAmount",
+        "CoveredVault_InvestExceedsCoverAmount",
       );
     });
 
@@ -216,7 +216,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).invest(investAmount)).to.be.revertedWithCustomError(
         vault,
-        "CoveredVault__InvestExceedsCoverAmount",
+        "CoveredVault_InvestExceedsCoverAmount",
       );
     });
 
@@ -403,7 +403,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).uninvest(uninvestAmount)).to.be.revertedWithCustomError(
         vault,
-        "CoveredVault__UnderlyingVaultBadRate",
+        "CoveredVault_UnderlyingVaultBadRate",
       );
 
       // set exchange rate threshold to 50%
@@ -688,7 +688,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).setUnderlyingVaultRateThreshold(newValue)).to.be.revertedWithCustomError(
         vault,
-        "CoveredVault__RateThresholdOutOfBound",
+        "CoveredVault_RateThresholdOutOfBound",
       );
     });
 
@@ -726,7 +726,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).setDepositFee(fee)).to.revertedWithCustomError(
         vault,
-        "CoveredVault__FeeOutOfBound",
+        "CoveredVault_FeeOutOfBound",
       );
     });
 
@@ -780,7 +780,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).applyDepositFee()).to.revertedWithCustomError(
         vault,
-        "CoveredVault__FeeProposalNotFound",
+        "CoveredVault_FeeProposalNotFound",
       );
     });
 
@@ -797,7 +797,7 @@ describe("CoveredVault", function () {
       await vault.connect(admin).applyDepositFee();
       await expect(vault.connect(admin).applyDepositFee()).to.revertedWithCustomError(
         vault,
-        "CoveredVault__FeeProposalNotFound",
+        "CoveredVault_FeeProposalNotFound",
       );
     });
 
@@ -813,7 +813,7 @@ describe("CoveredVault", function () {
       await increase(timeLock.sub("60"));
       await expect(vault.connect(admin).applyDepositFee()).to.revertedWithCustomError(
         vault,
-        "CoveredVault__FeeTimeLockNotDue",
+        "CoveredVault_FeeTimeLockNotDue",
       );
 
       await increase(BigNumber.from("60"));
@@ -875,7 +875,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).setManagementFee(fee)).to.revertedWithCustomError(
         vault,
-        "CoveredVault__FeeOutOfBound",
+        "CoveredVault_FeeOutOfBound",
       );
     });
 
@@ -929,7 +929,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).applyManagementFee()).to.revertedWithCustomError(
         vault,
-        "CoveredVault__FeeProposalNotFound",
+        "CoveredVault_FeeProposalNotFound",
       );
     });
 
@@ -946,7 +946,7 @@ describe("CoveredVault", function () {
       await vault.connect(admin).applyManagementFee();
       await expect(vault.connect(admin).applyManagementFee()).to.revertedWithCustomError(
         vault,
-        "CoveredVault__FeeProposalNotFound",
+        "CoveredVault_FeeProposalNotFound",
       );
     });
 
@@ -962,7 +962,7 @@ describe("CoveredVault", function () {
       await increase(timeLock.sub("60"));
       await expect(vault.connect(admin).applyManagementFee()).to.revertedWithCustomError(
         vault,
-        "CoveredVault__FeeTimeLockNotDue",
+        "CoveredVault_FeeTimeLockNotDue",
       );
 
       await increase(BigNumber.from("60"));
@@ -1092,7 +1092,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).claimFees(admin.address)).to.revertedWithCustomError(
         vault,
-        "CoveredVault__NoFeesToClaim",
+        "CoveredVault_NoFeesToClaim",
       );
     });
 
@@ -1214,7 +1214,7 @@ describe("CoveredVault", function () {
 
       await expect(
         vault.connect(admin).withdrawCoverManagerAssets(underlyingAsset.address, amount, vault.address),
-      ).to.be.revertedWithCustomError(vault, "CoveredVault__InvalidWithdrawAddress");
+      ).to.be.revertedWithCustomError(vault, "CoveredVault_InvalidWithdrawAddress");
     });
 
     it("Should call withdraw", async function () {
@@ -1302,7 +1302,7 @@ describe("CoveredVault", function () {
       await vault.connect(admin).invest(amount);
       await expect(vault.connect(admin).buyCover(amount.div(2), 0, amount.div(10), [])).to.be.revertedWithCustomError(
         vault,
-        "CoveredVault__InvalidBuyCoverAmount",
+        "CoveredVault_InvalidBuyCoverAmount",
       );
     });
 

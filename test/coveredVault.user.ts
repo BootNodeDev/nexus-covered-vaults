@@ -680,7 +680,7 @@ describe("CoveredVault", function () {
 
       await expect(
         vault.connect(user1)["deposit(uint256,address)"](depositAmount, user1.address),
-      ).to.be.revertedWithCustomError(vault, "CoveredVault__DepositMoreThanMax");
+      ).to.be.revertedWithCustomError(vault, "CoveredVault_DepositMoreThanMax");
     });
 
     it("reverts if invalid underlying vault rate", async function () {
@@ -715,7 +715,7 @@ describe("CoveredVault", function () {
 
       await expect(
         vault.connect(user2)["deposit(uint256,address)"](depositAssets, user2.address),
-      ).to.be.revertedWithCustomError(vault, "CoveredVault__UnderlyingVaultBadRate");
+      ).to.be.revertedWithCustomError(vault, "CoveredVault_UnderlyingVaultBadRate");
 
       // set exchange rate threshold to 50%
       await vault.connect(admin).setUnderlyingVaultRateThreshold(5000);
@@ -966,7 +966,7 @@ describe("CoveredVault", function () {
 
       await expect(
         vault.connect(user1)["mint(uint256,address)"](mintShares, user1.address),
-      ).to.be.revertedWithCustomError(vault, "CoveredVault__MintMoreThanMax");
+      ).to.be.revertedWithCustomError(vault, "CoveredVault_MintMoreThanMax");
     });
 
     it("reverts if invalid underlying vault rate", async function () {
@@ -1003,7 +1003,7 @@ describe("CoveredVault", function () {
 
       await expect(
         vault.connect(user2)["mint(uint256,address)"](mintShares, user2.address),
-      ).to.be.revertedWithCustomError(vault, "CoveredVault__UnderlyingVaultBadRate");
+      ).to.be.revertedWithCustomError(vault, "CoveredVault_UnderlyingVaultBadRate");
 
       // set exchange rate threshold to 50%
       await vault.connect(admin).setUnderlyingVaultRateThreshold(5000);
@@ -1384,7 +1384,7 @@ describe("CoveredVault", function () {
 
       await expect(
         vault["redeem(uint256,address,address)"](user1Balance, user1.address, user1.address),
-      ).to.be.revertedWithCustomError(vault, "CoveredVault__UnderlyingVaultBadRate");
+      ).to.be.revertedWithCustomError(vault, "CoveredVault_UnderlyingVaultBadRate");
 
       // set exchange rate threshold to 50%
       await vault.connect(admin).setUnderlyingVaultRateThreshold(5000);
@@ -1691,7 +1691,7 @@ describe("CoveredVault", function () {
 
       await expect(
         vault["withdraw(uint256,address,address)"](user1Balance.div(2), user1.address, user1.address),
-      ).to.be.revertedWithCustomError(vault, "CoveredVault__UnderlyingVaultBadRate");
+      ).to.be.revertedWithCustomError(vault, "CoveredVault_UnderlyingVaultBadRate");
 
       // set exchange rate threshold to 50%
       await vault.connect(admin).setUnderlyingVaultRateThreshold(5000);
@@ -1791,7 +1791,7 @@ describe("CoveredVault", function () {
 
       await expect(
         vault.connect(addr0)["deposit(uint256,address,uint256)"](amount, addr0.address, "100001"),
-      ).to.be.revertedWithCustomError(vault, "CoveredVault__DepositSlippage");
+      ).to.be.revertedWithCustomError(vault, "CoveredVault_DepositSlippage");
     });
 
     it("Should not revert on mint with assets = shares the first time", async function () {
@@ -1821,7 +1821,7 @@ describe("CoveredVault", function () {
       await underlyingAsset.approve(vault.address, amount);
       await expect(
         vault.connect(addr0)["mint(uint256,address,uint256)"](amount, addr0.address, "99999"),
-      ).to.be.revertedWithCustomError(vault, "CoveredVault__MintSlippage");
+      ).to.be.revertedWithCustomError(vault, "CoveredVault_MintSlippage");
     });
 
     it("Should not revert on withdraw with shares = maxShares", async function () {
@@ -1857,7 +1857,7 @@ describe("CoveredVault", function () {
         vault
           .connect(addr0)
           ["withdraw(uint256,address,address,uint256)"](amount, addr0.address, addr0.address, "99999"),
-      ).to.be.revertedWithCustomError(vault, "CoveredVault__WithdrawSlippage");
+      ).to.be.revertedWithCustomError(vault, "CoveredVault_WithdrawSlippage");
     });
 
     it("Should not revert on redeem with assets = minAssets", async function () {
@@ -1892,7 +1892,7 @@ describe("CoveredVault", function () {
       await vault.connect(addr0)["mint(uint256,address,uint256)"](amount, addr0.address, amount);
       await expect(
         vault.connect(addr0)["redeem(uint256,address,address,uint256)"](amount, addr0.address, addr0.address, "100001"),
-      ).to.be.revertedWithCustomError(vault, "CoveredVault__RedeemSlippage");
+      ).to.be.revertedWithCustomError(vault, "CoveredVault_RedeemSlippage");
     });
   });
 

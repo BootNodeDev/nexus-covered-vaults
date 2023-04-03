@@ -14,10 +14,10 @@ import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 abstract contract SafeERC4626 is ERC4626, ERC20Permit {
   /* ========== Custom Errors ========== */
 
-  error CoveredVault__DepositSlippage();
-  error CoveredVault__MintSlippage();
-  error CoveredVault__WithdrawSlippage();
-  error CoveredVault__RedeemSlippage();
+  error CoveredVault_DepositSlippage();
+  error CoveredVault_MintSlippage();
+  error CoveredVault_WithdrawSlippage();
+  error CoveredVault_RedeemSlippage();
 
   /* ========== Constructor ========== */
 
@@ -54,7 +54,7 @@ abstract contract SafeERC4626 is ERC4626, ERC20Permit {
    */
   function deposit(uint256 _assets, address _receiver, uint256 _minShares) external virtual returns (uint256) {
     uint256 shares = deposit(_assets, _receiver);
-    if (shares < _minShares) revert CoveredVault__DepositSlippage();
+    if (shares < _minShares) revert CoveredVault_DepositSlippage();
     return shares;
   }
 
@@ -66,7 +66,7 @@ abstract contract SafeERC4626 is ERC4626, ERC20Permit {
    */
   function mint(uint256 _shares, address _receiver, uint256 _maxAssets) external virtual returns (uint256) {
     uint256 assets = mint(_shares, _receiver);
-    if (assets > _maxAssets) revert CoveredVault__MintSlippage();
+    if (assets > _maxAssets) revert CoveredVault_MintSlippage();
     return assets;
   }
 
@@ -84,7 +84,7 @@ abstract contract SafeERC4626 is ERC4626, ERC20Permit {
     uint256 _maxShares
   ) external virtual returns (uint256) {
     uint256 shares = withdraw(_assets, _receiver, _owner);
-    if (shares > _maxShares) revert CoveredVault__WithdrawSlippage();
+    if (shares > _maxShares) revert CoveredVault_WithdrawSlippage();
     return shares;
   }
 
@@ -102,7 +102,7 @@ abstract contract SafeERC4626 is ERC4626, ERC20Permit {
     uint256 _minAssets
   ) external virtual returns (uint256) {
     uint256 assets = redeem(_shares, _receiver, _owner);
-    if (assets < _minAssets) revert CoveredVault__RedeemSlippage();
+    if (assets < _minAssets) revert CoveredVault_RedeemSlippage();
     return assets;
   }
 }
