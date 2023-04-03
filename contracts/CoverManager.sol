@@ -319,7 +319,7 @@ contract CoverManager is Ownable, ReentrancyGuard, ICoverManager {
     if (deposits[ETH_ADDRESS][msg.sender] < _params.maxPremiumInAsset) revert CoverManager_InsufficientFunds();
 
     uint256 initialBalance = address(this).balance;
-    uint256 coverId = ICover(cover).buyCover{ value: _params.amount }(_params, _coverChunkRequests);
+    uint256 coverId = ICover(cover).buyCover{ value: _params.maxPremiumInAsset }(_params, _coverChunkRequests);
     uint256 finalBalance = address(this).balance;
 
     uint256 spent = initialBalance - finalBalance;

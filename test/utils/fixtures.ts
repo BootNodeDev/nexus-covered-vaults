@@ -98,9 +98,6 @@ export async function deployCoverManager(underlyingAsset: ERC20Mock) {
     owner,
   );
 
-  await setBalance(coverManager.address, ethers.utils.parseEther("1000"));
-  await setBalance(cover.address, ethers.utils.parseEther("1000"));
-
   return { coverManager, cover, yieldTokenIncidents, underlyingAsset, coverNFT } as unknown as CoverManagerFixture;
 }
 
