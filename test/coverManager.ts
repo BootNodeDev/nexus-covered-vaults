@@ -85,7 +85,7 @@ describe("CoverManager", function () {
     });
   });
 
-  describe("allowed callers", function () {
+  describe("addToAllowList", function () {
     it("Should revert if is already allowed", async function () {
       const { coverManager } = await loadFixture(deployVaultFixture);
       const [user1, , , owner] = await ethers.getSigners();
@@ -97,6 +97,27 @@ describe("CoverManager", function () {
       );
     });
 
+    it("Should add address to allowlist", async function () {
+      const { coverManager } = await loadFixture(deployVaultFixture);
+      const [user1, , , owner] = await ethers.getSigners();
+
+      {
+        const allowed = await coverManager.allowList(user1.address);
+        expect(allowed).to.equal(false);
+      }
+
+      await expect(coverManager.connect(owner).addToAllowList(user1.address))
+        .to.emit(coverManager, "Allowed")
+        .withArgs(user1.address);
+
+      {
+        const allowed = await coverManager.allowList(user1.address);
+        expect(allowed).to.equal(true);
+      }
+    });
+  });
+
+  describe("removeFromAllowList", function () {
     it("Should revert if is already disallowed", async function () {
       const { coverManager } = await loadFixture(deployVaultFixture);
       const [user1, , , owner] = await ethers.getSigners();
@@ -105,6 +126,27 @@ describe("CoverManager", function () {
         coverManager,
         "CoverManager_AlreadyDisallowed",
       );
+    });
+
+    it("Should remove address from allowlist", async function () {
+      const { coverManager } = await loadFixture(deployVaultFixture);
+      const [user1, , , owner] = await ethers.getSigners();
+
+      await coverManager.connect(owner).addToAllowList(user1.address);
+
+      {
+        const allowed = await coverManager.allowList(user1.address);
+        expect(allowed).to.equal(true);
+      }
+
+      await expect(coverManager.connect(owner).removeFromAllowList(user1.address))
+        .to.emit(coverManager, "Disallowed")
+        .withArgs(user1.address);
+
+      {
+        const allowed = await coverManager.allowList(user1.address);
+        expect(allowed).to.equal(false);
+      }
     });
   });
 
