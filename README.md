@@ -12,7 +12,7 @@ The following prerequisites are required:
 Before running any command, make sure to install dependencies:
 
 ```sh
-$ yarn
+yarn
 ```
 
 ### Compile contracts
@@ -20,7 +20,7 @@ $ yarn
 Compile the smart contracts with Hardhat:
 
 ```sh
-$ yarn compile
+yarn compile
 ```
 
 ### Test
@@ -28,7 +28,7 @@ $ yarn compile
 Run unit tests:
 
 ```sh
-$ yarn test
+yarn test
 ```
 
 ### Integration Test
@@ -47,7 +47,7 @@ $ yarn test:fork
 Run unit tests coverage:
 
 ```sh
-$ yarn coverage
+yarn coverage
 ```
 
 ### Gas Report
@@ -55,7 +55,7 @@ $ yarn coverage
 Run unit tests with gas report:
 
 ```sh
-$ yarn gas-report
+yarn gas-report
 ```
 
 ### Linter
@@ -63,5 +63,51 @@ $ yarn gas-report
 Run typescript and solidity linters:
 
 ```sh
-$ yarn lint
+yarn lint
+```
+
+### Deployment
+
+Create `.env` file and complete the variables:
+
+```sh
+cp .env.example .env
+```
+
+## Deploy the contracts to Mainnet Network
+
+Deploy covered vault factory contract:
+```sh
+yarn deploy:factory:mainnet
+```
+
+Deploy cover manager contract:
+```sh
+yarn deploy:cover-manager:mainnet
+```
+
+Deploy a new covered vault contract:
+```sh
+yarn deploy:covered-vault:mainnet
+```
+
+## Deploy the contracts to Goerli Network
+Deploy mock contracts:
+```sh
+yarn deploy:mocks:goerli
+```
+
+Deploy covered vault factory contract:
+```sh
+yarn deploy:factory:goerli
+```
+
+Deploy cover manager contract:
+```sh
+yarn deploy:cover-manager:goerli
+```
+
+Deploy a new covered vault contract:
+```sh
+yarn deploy:covered-vault:goerli
 ```
