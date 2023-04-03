@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.17;
 
-import { CoveredVault } from "./CoveredVault.sol";
-import { ICoverManager } from "./interfaces/ICoverManager.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+import { ICoverManager } from "./interfaces/ICoverManager.sol";
+import { CoveredVault } from "./CoveredVault.sol";
 
 /**
  * @title CoveredVaultFactory

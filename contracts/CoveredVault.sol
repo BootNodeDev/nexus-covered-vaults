@@ -3,10 +3,10 @@ pragma solidity 0.8.17;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
-import { BuyCoverParams, PoolAllocationRequest, ICover } from "./interfaces/ICover.sol";
-import { ICoverManager } from "./interfaces/ICoverManager.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { BuyCoverParams, PoolAllocationRequest, ICover } from "./interfaces/ICover.sol";
+import { ICoverManager } from "./interfaces/ICoverManager.sol";
 import { FeeManager } from "./vault/FeeManager.sol";
 import { SafeERC4626 } from "./vault/SafeERC4626.sol";
 
