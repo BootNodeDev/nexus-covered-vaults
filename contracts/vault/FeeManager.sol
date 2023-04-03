@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.17;
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { AccessManager } from "./AccessManager.sol";
 
 /**
@@ -105,10 +105,10 @@ abstract contract FeeManager is AccessManager {
 
   /* ========== Custom Errors ========== */
 
-  error CoveredVault__FeeOutOfBound();
-  error CoveredVault__FeeProposalNotFound();
-  error CoveredVault__FeeTimeLockNotDue();
-  error CoveredVault__NoFeesToClaim();
+  error CoveredVault_FeeOutOfBound();
+  error CoveredVault_FeeProposalNotFound();
+  error CoveredVault_FeeTimeLockNotDue();
+  error CoveredVault_NoFeesToClaim();
 
   /* ========== Constructor ========== */
 
@@ -119,8 +119,8 @@ abstract contract FeeManager is AccessManager {
    * @param _managementFee Fee for managed assets
    */
   constructor(address _admin, uint256 _depositFee, uint256 _managementFee) AccessManager(_admin) {
-    if (_depositFee > FEE_DENOMINATOR) revert CoveredVault__FeeOutOfBound();
-    if (_managementFee > FEE_DENOMINATOR) revert CoveredVault__FeeOutOfBound();
+    if (_depositFee > FEE_DENOMINATOR) revert CoveredVault_FeeOutOfBound();
+    if (_managementFee > FEE_DENOMINATOR) revert CoveredVault_FeeOutOfBound();
 
     depositFee = _depositFee;
     managementFee = _managementFee;
@@ -136,7 +136,7 @@ abstract contract FeeManager is AccessManager {
    * @param _depositFee New fee percentage to charge users on deposit
    */
   function setDepositFee(uint256 _depositFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (_depositFee > FEE_DENOMINATOR) revert CoveredVault__FeeOutOfBound();
+    if (_depositFee > FEE_DENOMINATOR) revert CoveredVault_FeeOutOfBound();
 
     proposedDepositFee.newFee = _depositFee;
     proposedDepositFee.deadline = block.timestamp + FEE_TIME_LOCK;
@@ -149,7 +149,7 @@ abstract contract FeeManager is AccessManager {
    * @param _managementFee New fee percentage to charge users on invested assets
    */
   function setManagementFee(uint256 _managementFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (_managementFee > FEE_DENOMINATOR) revert CoveredVault__FeeOutOfBound();
+    if (_managementFee > FEE_DENOMINATOR) revert CoveredVault_FeeOutOfBound();
 
     proposedManagementFee.newFee = _managementFee;
     proposedManagementFee.deadline = block.timestamp + FEE_TIME_LOCK;
@@ -161,8 +161,8 @@ abstract contract FeeManager is AccessManager {
    * @dev Sets the depositFee to its pending value if FEE_TIME_LOCK has passed.
    */
   function applyDepositFee() external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (proposedDepositFee.deadline == 0) revert CoveredVault__FeeProposalNotFound();
-    if (block.timestamp < proposedDepositFee.deadline) revert CoveredVault__FeeTimeLockNotDue();
+    if (proposedDepositFee.deadline == 0) revert CoveredVault_FeeProposalNotFound();
+    if (block.timestamp < proposedDepositFee.deadline) revert CoveredVault_FeeTimeLockNotDue();
 
     depositFee = proposedDepositFee.newFee;
     delete proposedDepositFee;
@@ -174,8 +174,8 @@ abstract contract FeeManager is AccessManager {
    * @dev Sets the managementFee to its pending value if FEE_TIME_LOCK has passed.
    */
   function applyManagementFee() external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (proposedManagementFee.deadline == 0) revert CoveredVault__FeeProposalNotFound();
-    if (block.timestamp < proposedManagementFee.deadline) revert CoveredVault__FeeTimeLockNotDue();
+    if (proposedManagementFee.deadline == 0) revert CoveredVault_FeeProposalNotFound();
+    if (block.timestamp < proposedManagementFee.deadline) revert CoveredVault_FeeTimeLockNotDue();
 
     // charge fees up to now before applying the new fee
     _updateAssets();
@@ -262,7 +262,7 @@ abstract contract FeeManager is AccessManager {
     uint256 currentAccumulatedAssetFees = accumulatedAssetFees;
     uint256 currentAccumulatedUVSharesFees = accumulatedUVSharesFees;
 
-    if (currentAccumulatedAssetFees == 0 && currentAccumulatedUVSharesFees == 0) revert CoveredVault__NoFeesToClaim();
+    if (currentAccumulatedAssetFees == 0 && currentAccumulatedUVSharesFees == 0) revert CoveredVault_NoFeesToClaim();
 
     accumulatedAssetFees = 0;
     accumulatedUVSharesFees = 0;

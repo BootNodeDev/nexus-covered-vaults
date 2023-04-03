@@ -1,6 +1,5 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import {
   ERC4626Mock,
   ERC20Mock,
@@ -97,9 +96,6 @@ export async function deployCoverManager(underlyingAsset: ERC20Mock) {
     [cover.address, yieldTokenIncidents.address, pool.address],
     owner,
   );
-
-  await setBalance(coverManager.address, ethers.utils.parseEther("1000"));
-  await setBalance(cover.address, ethers.utils.parseEther("1000"));
 
   return { coverManager, cover, yieldTokenIncidents, underlyingAsset, coverNFT } as unknown as CoverManagerFixture;
 }

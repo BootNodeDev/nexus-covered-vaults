@@ -40,26 +40,26 @@ describe("CoveredVault", function () {
       expect(await vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), admin.address)).to.equals(true);
       expect(await vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), user1.address)).to.equals(false);
 
-      await vault.connect(admin).grantRole(vault.BOT_ROLE(), user1.address);
+      await vault.connect(admin).grantRole(vault.OPERATOR_ROLE(), user1.address);
 
-      expect(await vault.hasRole(vault.BOT_ROLE(), user1.address)).to.equals(true);
+      expect(await vault.hasRole(vault.OPERATOR_ROLE(), user1.address)).to.equals(true);
       expect(await vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), user1.address)).to.equals(false);
     });
   });
 
   describe("invest", function () {
-    it("Should revert if not admin or bot", async function () {
+    it("Should revert if not admin or operator", async function () {
       const { vault } = await loadFixture(mintVaultSharesFixture);
       const [user1, , , admin] = await ethers.getSigners();
 
-      const botRole = await vault.BOT_ROLE();
+      const operatorRole = await vault.OPERATOR_ROLE();
       const amount = parseEther("1000");
 
       await expect(vault.connect(user1).invest(amount.div(2))).to.be.revertedWith(
-        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${botRole}`,
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${operatorRole}`,
       );
 
-      await vault.connect(admin).grantRole(botRole, user1.address);
+      await vault.connect(admin).grantRole(operatorRole, user1.address);
 
       await vault.connect(user1).invest(amount.div(2));
       await vault.connect(admin).invest(amount.div(2));
@@ -157,7 +157,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).invest(investAmount)).to.be.revertedWithCustomError(
         vault,
-        "CoveredVault__UnderlyingVaultBadRate",
+        "CoveredVault_UnderlyingVaultBadRate",
       );
 
       // set exchange rate threshold to 50%
@@ -190,7 +190,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).invest(investAmount)).to.be.revertedWithCustomError(
         vault,
-        "CoveredVault__InvestExceedsCoverAmount",
+        "CoveredVault_InvestExceedsCoverAmount",
       );
     });
 
@@ -216,7 +216,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).invest(investAmount)).to.be.revertedWithCustomError(
         vault,
-        "CoveredVault__InvestExceedsCoverAmount",
+        "CoveredVault_InvestExceedsCoverAmount",
       );
     });
 
@@ -295,19 +295,19 @@ describe("CoveredVault", function () {
   });
 
   describe("uninvest", function () {
-    it("Should revert if not admin or bot", async function () {
+    it("Should revert if not admin or operator", async function () {
       const { vault } = await loadFixture(mintVaultSharesFixture);
       const [user1, , , admin] = await ethers.getSigners();
 
-      const botRole = await vault.BOT_ROLE();
+      const operatorRole = await vault.OPERATOR_ROLE();
 
       const amount = parseEther("1000");
 
       await expect(vault.connect(user1).uninvest(amount.div(2))).to.be.revertedWith(
-        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${botRole}`,
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${operatorRole}`,
       );
 
-      await vault.connect(admin).grantRole(botRole, user1.address);
+      await vault.connect(admin).grantRole(operatorRole, user1.address);
 
       // Invest to be able to uninvest
       await vault.connect(admin).invest(amount);
@@ -403,7 +403,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).uninvest(uninvestAmount)).to.be.revertedWithCustomError(
         vault,
-        "CoveredVault__UnderlyingVaultBadRate",
+        "CoveredVault_UnderlyingVaultBadRate",
       );
 
       // set exchange rate threshold to 50%
@@ -473,10 +473,10 @@ describe("CoveredVault", function () {
     it("Should be able to pause only by admin", async function () {
       const { vault } = await loadFixture(mintVaultSharesFixture);
 
-      const [botUser, anyUser, , admin] = await ethers.getSigners();
-      await vault.connect(admin).grantRole(vault.BOT_ROLE(), botUser.address);
+      const [operatorUser, anyUser, , admin] = await ethers.getSigners();
+      await vault.connect(admin).grantRole(vault.OPERATOR_ROLE(), operatorUser.address);
 
-      await expect(vault.connect(botUser).pause()).to.be.reverted;
+      await expect(vault.connect(operatorUser).pause()).to.be.reverted;
       await expect(vault.connect(anyUser).pause()).to.be.reverted;
       await vault.connect(admin).pause();
       expect(await vault.connect(admin).paused()).to.equal(true);
@@ -485,11 +485,11 @@ describe("CoveredVault", function () {
     it("Should be able to unpause when paused only by admin", async function () {
       const { vault } = await loadFixture(mintVaultSharesFixture);
 
-      const [botUser, anyUser, , admin] = await ethers.getSigners();
-      await vault.connect(admin).grantRole(vault.BOT_ROLE(), botUser.address);
+      const [operatorUser, anyUser, , admin] = await ethers.getSigners();
+      await vault.connect(admin).grantRole(vault.OPERATOR_ROLE(), operatorUser.address);
       await vault.connect(admin).pause();
 
-      await expect(vault.connect(botUser).unpause()).to.be.reverted;
+      await expect(vault.connect(operatorUser).unpause()).to.be.reverted;
       await expect(vault.connect(anyUser).unpause()).to.be.reverted;
       await vault.connect(admin).unpause();
       expect(await vault.connect(admin).paused()).to.equal(false);
@@ -626,8 +626,8 @@ describe("CoveredVault", function () {
         `AccessControl: account ${user1.address.toLowerCase()} is missing role ${adminRole}`,
       );
 
-      // Try with bot operator
-      await vault.connect(admin).grantRole(await vault.BOT_ROLE(), user1.address);
+      // Try with operator
+      await vault.connect(admin).grantRole(await vault.OPERATOR_ROLE(), user1.address);
 
       await expect(vault.connect(user1).setMaxAssetsLimit(amount)).to.be.revertedWith(
         `AccessControl: account ${user1.address.toLowerCase()} is missing role ${adminRole}`,
@@ -667,7 +667,7 @@ describe("CoveredVault", function () {
       );
 
       // Try with operator role
-      await vault.connect(admin).grantRole(await vault.BOT_ROLE(), user1.address);
+      await vault.connect(admin).grantRole(await vault.OPERATOR_ROLE(), user1.address);
 
       await expect(vault.connect(user1).setUnderlyingVaultRateThreshold(newValue)).to.be.revertedWith(
         `AccessControl: account ${user1.address.toLowerCase()} is missing role ${adminRole}`,
@@ -688,7 +688,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).setUnderlyingVaultRateThreshold(newValue)).to.be.revertedWithCustomError(
         vault,
-        "CoveredVault__RateThresholdOutOfBound",
+        "CoveredVault_RateThresholdOutOfBound",
       );
     });
 
@@ -726,7 +726,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).setDepositFee(fee)).to.revertedWithCustomError(
         vault,
-        "CoveredVault__FeeOutOfBound",
+        "CoveredVault_FeeOutOfBound",
       );
     });
 
@@ -780,7 +780,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).applyDepositFee()).to.revertedWithCustomError(
         vault,
-        "CoveredVault__FeeProposalNotFound",
+        "CoveredVault_FeeProposalNotFound",
       );
     });
 
@@ -797,7 +797,7 @@ describe("CoveredVault", function () {
       await vault.connect(admin).applyDepositFee();
       await expect(vault.connect(admin).applyDepositFee()).to.revertedWithCustomError(
         vault,
-        "CoveredVault__FeeProposalNotFound",
+        "CoveredVault_FeeProposalNotFound",
       );
     });
 
@@ -813,7 +813,7 @@ describe("CoveredVault", function () {
       await increase(timeLock.sub("60"));
       await expect(vault.connect(admin).applyDepositFee()).to.revertedWithCustomError(
         vault,
-        "CoveredVault__FeeTimeLockNotDue",
+        "CoveredVault_FeeTimeLockNotDue",
       );
 
       await increase(BigNumber.from("60"));
@@ -875,7 +875,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).setManagementFee(fee)).to.revertedWithCustomError(
         vault,
-        "CoveredVault__FeeOutOfBound",
+        "CoveredVault_FeeOutOfBound",
       );
     });
 
@@ -929,7 +929,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).applyManagementFee()).to.revertedWithCustomError(
         vault,
-        "CoveredVault__FeeProposalNotFound",
+        "CoveredVault_FeeProposalNotFound",
       );
     });
 
@@ -946,7 +946,7 @@ describe("CoveredVault", function () {
       await vault.connect(admin).applyManagementFee();
       await expect(vault.connect(admin).applyManagementFee()).to.revertedWithCustomError(
         vault,
-        "CoveredVault__FeeProposalNotFound",
+        "CoveredVault_FeeProposalNotFound",
       );
     });
 
@@ -962,7 +962,7 @@ describe("CoveredVault", function () {
       await increase(timeLock.sub("60"));
       await expect(vault.connect(admin).applyManagementFee()).to.revertedWithCustomError(
         vault,
-        "CoveredVault__FeeTimeLockNotDue",
+        "CoveredVault_FeeTimeLockNotDue",
       );
 
       await increase(BigNumber.from("60"));
@@ -1092,7 +1092,7 @@ describe("CoveredVault", function () {
 
       await expect(vault.connect(admin).claimFees(admin.address)).to.revertedWithCustomError(
         vault,
-        "CoveredVault__NoFeesToClaim",
+        "CoveredVault_NoFeesToClaim",
       );
     });
 
@@ -1214,7 +1214,7 @@ describe("CoveredVault", function () {
 
       await expect(
         vault.connect(admin).withdrawCoverManagerAssets(underlyingAsset.address, amount, vault.address),
-      ).to.be.revertedWithCustomError(vault, "CoveredVault__InvalidWithdrawAddress");
+      ).to.be.revertedWithCustomError(vault, "CoveredVault_InvalidWithdrawAddress");
     });
 
     it("Should call withdraw", async function () {
@@ -1244,23 +1244,23 @@ describe("CoveredVault", function () {
   });
 
   describe("buyCover", function () {
-    it("Should revert if not admin or bot", async function () {
+    it("Should revert if not admin or operator", async function () {
       const { vault, coverManager } = await loadFixture(deployVaultFixture);
       const [user1, , , admin] = await ethers.getSigners();
 
-      const botRole = await vault.BOT_ROLE();
+      const operatorRole = await vault.OPERATOR_ROLE();
       const amount = parseEther("1000");
 
       await coverManager.connect(admin).addToAllowList(vault.address);
       await coverManager.connect(admin).depositETHOnBehalf(vault.address, { value: amount });
 
       await expect(vault.connect(user1).buyCover(amount.div(2), 0, amount.div(10), [])).to.be.revertedWith(
-        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${botRole}`,
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${operatorRole}`,
       );
 
       await expect(vault.connect(admin).buyCover(amount.div(2), 0, amount.div(10), [])).to.not.be.reverted;
 
-      await vault.connect(admin).grantRole(botRole, user1.address);
+      await vault.connect(admin).grantRole(operatorRole, user1.address);
       await vault.connect(user1).buyCover(amount.div(2), 0, amount.div(10), []);
       await expect(vault.connect(user1).buyCover(amount.div(2), 0, amount.div(10), [])).to.not.be.reverted;
     });
@@ -1302,7 +1302,7 @@ describe("CoveredVault", function () {
       await vault.connect(admin).invest(amount);
       await expect(vault.connect(admin).buyCover(amount.div(2), 0, amount.div(10), [])).to.be.revertedWithCustomError(
         vault,
-        "CoveredVault__InvalidBuyCoverAmount",
+        "CoveredVault_InvalidBuyCoverAmount",
       );
     });
 
@@ -1403,6 +1403,23 @@ describe("CoveredVault", function () {
 
       const owner = await coverNFT.ownerOf(coverId1);
       expect(owner).to.be.eq(vault.address);
+    });
+
+    it("Should emit CoverBought event", async function () {
+      const { coverManager, vault } = await loadFixture(deployVaultFixture);
+
+      const [, , , admin] = await ethers.getSigners();
+
+      const amount = parseEther("100");
+
+      await coverManager.connect(admin).addToAllowList(vault.address);
+      await coverManager.connect(admin).depositETHOnBehalf(vault.address, { value: amount });
+
+      const expectedCoverId = 1;
+      const period = 100;
+      await expect(vault.connect(admin).buyCover(amount, period, amount.div(10), []))
+        .to.emit(vault, "CoverBought")
+        .withArgs(admin.address, expectedCoverId, amount, period);
     });
   });
 });

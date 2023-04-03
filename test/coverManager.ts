@@ -49,7 +49,7 @@ describe("CoverManager", function () {
       const { cover, coverManager, yieldTokenIncidents } = await loadFixture(deployVaultFixture);
 
       expect(await coverManager.cover()).to.equal(cover.address);
-      expect(await coverManager.yieldTokenIncident()).to.equal(yieldTokenIncidents.address);
+      expect(await coverManager.yieldTokenIncidents()).to.equal(yieldTokenIncidents.address);
     });
   });
 
@@ -85,7 +85,7 @@ describe("CoverManager", function () {
     });
   });
 
-  describe("allowed callers", function () {
+  describe("addToAllowList", function () {
     it("Should revert if is already allowed", async function () {
       const { coverManager } = await loadFixture(deployVaultFixture);
       const [user1, , , owner] = await ethers.getSigners();
@@ -97,6 +97,27 @@ describe("CoverManager", function () {
       );
     });
 
+    it("Should add address to allowlist", async function () {
+      const { coverManager } = await loadFixture(deployVaultFixture);
+      const [user1, , , owner] = await ethers.getSigners();
+
+      {
+        const allowed = await coverManager.allowList(user1.address);
+        expect(allowed).to.equal(false);
+      }
+
+      await expect(coverManager.connect(owner).addToAllowList(user1.address))
+        .to.emit(coverManager, "Allowed")
+        .withArgs(user1.address);
+
+      {
+        const allowed = await coverManager.allowList(user1.address);
+        expect(allowed).to.equal(true);
+      }
+    });
+  });
+
+  describe("removeFromAllowList", function () {
     it("Should revert if is already disallowed", async function () {
       const { coverManager } = await loadFixture(deployVaultFixture);
       const [user1, , , owner] = await ethers.getSigners();
@@ -105,6 +126,27 @@ describe("CoverManager", function () {
         coverManager,
         "CoverManager_AlreadyDisallowed",
       );
+    });
+
+    it("Should remove address from allowlist", async function () {
+      const { coverManager } = await loadFixture(deployVaultFixture);
+      const [user1, , , owner] = await ethers.getSigners();
+
+      await coverManager.connect(owner).addToAllowList(user1.address);
+
+      {
+        const allowed = await coverManager.allowList(user1.address);
+        expect(allowed).to.equal(true);
+      }
+
+      await expect(coverManager.connect(owner).removeFromAllowList(user1.address))
+        .to.emit(coverManager, "Disallowed")
+        .withArgs(user1.address);
+
+      {
+        const allowed = await coverManager.allowList(user1.address);
+        expect(allowed).to.equal(false);
+      }
     });
   });
 
@@ -156,11 +198,11 @@ describe("CoverManager", function () {
       const premium = await cover.premium();
       const PREMIUM_DENOMINATOR = await cover.PREMIUM_DENOMINATOR();
       const amountToPay = buyCoverParams.amount.mul(premium).div(PREMIUM_DENOMINATOR);
-      const fundsBefore = await coverManager.funds(underlyingAsset.address, user1.address);
+      const fundsBefore = await coverManager.deposits(underlyingAsset.address, user1.address);
       await coverManager
         .connect(user1)
         .buyCover({ ...buyCoverParams, owner: user1.address, paymentAsset: 1 }, [poolAlloc]);
-      const fundsAfter = await coverManager.funds(underlyingAsset.address, user1.address);
+      const fundsAfter = await coverManager.deposits(underlyingAsset.address, user1.address);
 
       expect(fundsAfter).to.be.eq(fundsBefore.sub(amountToPay));
     });
@@ -358,13 +400,13 @@ describe("CoverManager", function () {
       await underlyingAsset.mint(user1.address, ethers.utils.parseEther("1000"));
       await underlyingAsset.connect(user1).approve(coverManager.address, ethers.utils.parseEther("1000"));
 
-      const fundsBefore = await coverManager.funds(underlyingAsset.address, user1.address);
+      const fundsBefore = await coverManager.deposits(underlyingAsset.address, user1.address);
       const cmBalanceBefore = await underlyingAsset.balanceOf(coverManager.address);
       const user1BalanceBefore = await underlyingAsset.balanceOf(user1.address);
 
       await coverManager.connect(user1).depositOnBehalf(underlyingAsset.address, buyCoverParams.amount, user1.address);
 
-      const fundsAfter = await coverManager.funds(underlyingAsset.address, user1.address);
+      const fundsAfter = await coverManager.deposits(underlyingAsset.address, user1.address);
       const cmBalanceAfter = await underlyingAsset.balanceOf(coverManager.address);
       const user1BalanceAfter = await underlyingAsset.balanceOf(user1.address);
 
@@ -412,7 +454,7 @@ describe("CoverManager", function () {
 
       const ETH_ADDRESS = await coverManager.ETH_ADDRESS();
 
-      const fundsBefore = await coverManager.funds(ETH_ADDRESS, user1.address);
+      const fundsBefore = await coverManager.deposits(ETH_ADDRESS, user1.address);
       const cmBalanceBefore = await ethers.provider.getBalance(coverManager.address);
       const user1BalanceBefore = await ethers.provider.getBalance(user1.address);
 
@@ -421,7 +463,7 @@ describe("CoverManager", function () {
         .connect(user1)
         .depositETHOnBehalf(user1.address, { value: buyCoverParams.amount, gasPrice: 0 });
 
-      const fundsAfter = await coverManager.funds(ETH_ADDRESS, user1.address);
+      const fundsAfter = await coverManager.deposits(ETH_ADDRESS, user1.address);
       const cmBalanceAfter = await ethers.provider.getBalance(coverManager.address);
       const user1BalanceAfter = await ethers.provider.getBalance(user1.address);
 
@@ -454,14 +496,14 @@ describe("CoverManager", function () {
         .connect(user1)
         .depositETHOnBehalf(user1.address, { value: buyCoverParams.amount, gasPrice: 0 });
 
-      const fundsBefore = await coverManager.funds(ETH_ADDRESS, user1.address);
+      const fundsBefore = await coverManager.deposits(ETH_ADDRESS, user1.address);
       const cmBalanceBefore = await ethers.provider.getBalance(coverManager.address);
       const user1BalanceBefore = await ethers.provider.getBalance(user1.address);
 
       await setNextBlockBaseFeePerGas(0);
       await coverManager.connect(user1).withdraw(ETH_ADDRESS, buyCoverParams.amount, user1.address, { gasPrice: 0 });
 
-      const fundsAfter = await coverManager.funds(ETH_ADDRESS, user1.address);
+      const fundsAfter = await coverManager.deposits(ETH_ADDRESS, user1.address);
       const cmBalanceAfter = await ethers.provider.getBalance(coverManager.address);
       const user1BalanceAfter = await ethers.provider.getBalance(user1.address);
 
@@ -479,13 +521,13 @@ describe("CoverManager", function () {
 
       await coverManager.connect(user1).depositOnBehalf(underlyingAsset.address, buyCoverParams.amount, user1.address);
 
-      const fundsBefore = await coverManager.funds(underlyingAsset.address, user1.address);
+      const fundsBefore = await coverManager.deposits(underlyingAsset.address, user1.address);
       const cmBalanceBefore = await underlyingAsset.balanceOf(coverManager.address);
       const user1BalanceBefore = await underlyingAsset.balanceOf(user1.address);
 
       await coverManager.connect(user1).withdraw(underlyingAsset.address, buyCoverParams.amount, user1.address);
 
-      const fundsAfter = await coverManager.funds(underlyingAsset.address, user1.address);
+      const fundsAfter = await coverManager.deposits(underlyingAsset.address, user1.address);
       const cmBalanceAfter = await underlyingAsset.balanceOf(coverManager.address);
       const user1BalanceAfter = await underlyingAsset.balanceOf(user1.address);
 
