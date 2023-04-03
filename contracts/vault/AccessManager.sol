@@ -12,9 +12,9 @@ contract AccessManager is AccessControlEnumerable, Pausable {
   /* ========== Constants ========== */
 
   /**
-   * @dev Role for botOperator
+   * @dev Role for contract operator
    */
-  bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
+  bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
   /* ========== Modifiers ========== */
 

@@ -455,7 +455,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
     uint32 _period,
     uint256 _maxPremiumInAsset,
     PoolAllocationRequest[] memory _coverChunkRequests
-  ) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
+  ) external onlyAdminOrRole(OPERATOR_ROLE) whenNotPaused {
     // coverId = 0 is the flag to purchase a new cover
     uint256 coverIdParam = 0;
 
@@ -543,7 +543,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
    * @dev Invest idle vault assets into the underlying vault. Only operator roles can call this method.
    * @param _amount Amount of assets to invest
    */
-  function invest(uint256 _amount) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
+  function invest(uint256 _amount) external onlyAdminOrRole(OPERATOR_ROLE) whenNotPaused {
     // calculate management fees
     uint256 fee = _calculateManagementFee(underlyingVaultShares);
 
@@ -577,7 +577,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
    * @dev Uninvest active vault assets out of the underlying vault. Only operator roles can call this method.
    * @param _shares Amount of shares to uninvest
    */
-  function uninvest(uint256 _shares) external onlyAdminOrRole(BOT_ROLE) whenNotPaused {
+  function uninvest(uint256 _shares) external onlyAdminOrRole(OPERATOR_ROLE) whenNotPaused {
     // calculate management fees
     uint256 fee = _calculateManagementFee(underlyingVaultShares);
 
