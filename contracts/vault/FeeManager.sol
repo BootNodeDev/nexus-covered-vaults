@@ -7,15 +7,19 @@ import { AccessManager } from "./AccessManager.sol";
 
 /**
  * @title FeeManager
- * @dev Implements logic related to the vault fees
+ * @dev Implements logic related to the vault fees. Includes two types of fees, Deposit Fees and Management fees.
  */
 abstract contract FeeManager is AccessManager {
   using SafeERC20 for IERC20;
+
+  /* ========== Structs ========== */
 
   struct ProposedDepositFee {
     uint256 deadline;
     uint256 newFee;
   }
+
+  /* ========== Constants ========== */
 
   /**
    *  @dev Timelock for depositFee application
@@ -31,6 +35,8 @@ abstract contract FeeManager is AccessManager {
    * @dev Period over which management fee are calculated
    */
   uint256 public constant FEE_MANAGER_PERIOD = 365 days;
+
+  /* ========== Contract Variables ========== */
 
   /**
    * @dev Amount of accumulated fees in asset for the admin to claim
@@ -104,6 +110,8 @@ abstract contract FeeManager is AccessManager {
   error CoveredVault__FeeTimeLockNotDue();
   error CoveredVault__NoFeesToClaim();
 
+  /* ========== Constructor ========== */
+
   /**
    * @dev Set fees initial parameters
    * @param _admin address of admin operator
@@ -120,6 +128,8 @@ abstract contract FeeManager is AccessManager {
     emit DepositFeeUpdated(_depositFee);
     emit ManagementFeeUpdated(_managementFee);
   }
+
+  /* ========== Admin methods ========== */
 
   /**
    * @dev Sets the depositFee to be applied after FEE_TIME_LOCK has passed.
@@ -176,27 +186,7 @@ abstract contract FeeManager is AccessManager {
     emit ManagementFeeUpdated(managementFee);
   }
 
-  /**
-   * @dev Transfers accumulated fees. Only Admin can call this method
-   * @param _to receiver of the claimed fees
-   */
-  function _claimFees(address asset, address uvAsset, address _to) internal {
-    uint256 _accumulatedAssetFees = accumulatedAssetFees;
-    uint256 _accumulatedUVSharesFees = accumulatedUVSharesFees;
-
-    if (_accumulatedAssetFees == 0 && _accumulatedUVSharesFees == 0) revert CoveredVault__NoFeesToClaim();
-
-    accumulatedAssetFees = 0;
-    accumulatedUVSharesFees = 0;
-
-    if (_accumulatedAssetFees > 0) {
-      IERC20(asset).safeTransfer(_to, _accumulatedAssetFees);
-    }
-
-    if (_accumulatedUVSharesFees > 0) {
-      IERC20(uvAsset).safeTransfer(_to, _accumulatedUVSharesFees);
-    }
-  }
+  /* ========== Internal deposit fee methods ========== */
 
   /**
    * @dev Calculates the fee to be subtracted from an amount
@@ -226,6 +216,19 @@ abstract contract FeeManager is AccessManager {
   }
 
   /**
+   * @dev Updates the accumulated deposit fees in asset
+   * @param _asset address of the asset
+   * @param _amount amount of asset charges as fee
+   */
+  function _accrueDepositFees(address _asset, uint256 _amount) internal {
+    accumulatedAssetFees += _amount;
+
+    emit FeeAccrued(_asset, _amount);
+  }
+
+  /* ========== Internal management fee methods ========== */
+
+  /**
    * @dev Calculates the fee to be subtracted from an amount
    * feeAmount = _amount * secondsSinceLastUpdate * FeeN / FeeD / feePeriod
    * @param _amount total amount
@@ -237,17 +240,6 @@ abstract contract FeeManager is AccessManager {
   }
 
   /**
-   * @dev Updates the accumulated deposit fees in asset
-   * @param _asset address of the asset
-   * @param _amount amount of asset charges as fee
-   */
-  function _accrueDepositFees(address _asset, uint256 _amount) internal {
-    accumulatedAssetFees += _amount;
-
-    emit FeeAccrued(_asset, _amount);
-  }
-
-  /**
    * @dev Updates the accumulated management fees in underlying vault shares
    * @param _asset address of the asset
    * @param _amount amount of asset charges as fee
@@ -256,6 +248,32 @@ abstract contract FeeManager is AccessManager {
     accumulatedUVSharesFees += _amount;
 
     emit FeeAccrued(_asset, _amount);
+  }
+
+  /* ========== Internal methods ========== */
+
+  /**
+   * @dev Transfers accumulated fees
+   * @param _asset Address of the underlying asset
+   * @param _uvAsset Address of the underlying vault asset
+   * @param _to receiver of the claimed fees
+   */
+  function _claimFees(address _asset, address _uvAsset, address _to) internal {
+    uint256 currentAccumulatedAssetFees = accumulatedAssetFees;
+    uint256 currentAccumulatedUVSharesFees = accumulatedUVSharesFees;
+
+    if (currentAccumulatedAssetFees == 0 && currentAccumulatedUVSharesFees == 0) revert CoveredVault__NoFeesToClaim();
+
+    accumulatedAssetFees = 0;
+    accumulatedUVSharesFees = 0;
+
+    if (currentAccumulatedAssetFees > 0) {
+      IERC20(_asset).safeTransfer(_to, currentAccumulatedAssetFees);
+    }
+
+    if (currentAccumulatedUVSharesFees > 0) {
+      IERC20(_uvAsset).safeTransfer(_to, currentAccumulatedUVSharesFees);
+    }
   }
 
   /**

@@ -19,6 +19,8 @@ contract CoveredVault is SafeERC4626, FeeManager {
   using SafeERC20 for IERC20;
   using Math for uint256;
 
+  /* ========== Constants ========== */
+
   /**
    * @dev Rate threshold denominator 100% with two decimals
    */
@@ -29,8 +31,32 @@ contract CoveredVault is SafeERC4626, FeeManager {
    */
   uint256 public constant RATE_UNIT = 1 ether;
 
+  /* ========== Immutable Variables ========== */
+
   /**
-   * @dev Percentage rate threshold of an update in the underlying vault exchange rate
+   * @dev Address of the underlying vault
+   */
+  IERC4626 public immutable underlyingVault;
+
+  /**
+   * @dev Id of the Nexus Mutual product that the vault purchases cover for
+   */
+  uint24 public immutable productId;
+
+  /**
+   * @dev Id of Nexus Cover asset. Must represent the same asset that the vault's underlying asset
+   */
+  uint8 public immutable coverAsset;
+
+  /**
+   * @dev Address of the cover manager contract
+   */
+  ICoverManager public immutable coverManager;
+
+  /* ========== Contract Variables ========== */
+
+  /**
+   * @dev Percentage rate threshold of the difference between the previous and the current underlying vault exchange rate
    */
   uint256 public uvRateThreshold;
 
@@ -40,29 +66,9 @@ contract CoveredVault is SafeERC4626, FeeManager {
   uint256 public latestUvRate;
 
   /**
-   * @dev CoverId assigned on buyCover
+   * @dev Id of the current purchased cover in Nexus Mutual
    */
   uint256 public coverId;
-
-  /**
-   * @dev Address of the underlying vault
-   */
-  IERC4626 public immutable underlyingVault;
-
-  /**
-   * @dev Id of the nexus product id
-   */
-  uint24 public immutable productId;
-
-  /**
-   * @dev Id of nexus cover asset that should match the vault asset
-   */
-  uint8 public immutable coverAsset;
-
-  /**
-   * @dev Address of the cover manager contract
-   */
-  ICoverManager public immutable coverManager;
 
   /**
    * @dev Maximum amount of assets that can be managed by the vault.
@@ -119,18 +125,18 @@ contract CoveredVault is SafeERC4626, FeeManager {
   /* ========== Constructor ========== */
 
   /**
-   * @dev Set the underlying vault contract, name and symbol of the vault.
+   * @dev Initializes the contract variables
    * @param _underlyingVault Underlying vault ERC4626-compatible contract
    * @param _name Name of the vault
    * @param _symbol Symbol of the vault
    * @param _admin address of admin operator
-   * @param _maxAssetsLimit New maximum asset amount limit
-   * @param _uvRateThreshold Underlying vault exchange rate update threshold
+   * @param _maxAssetsLimit Maximum asset amount limit
+   * @param _uvRateThreshold Underlying vault exchange rate difference threshold
    * @param _productId id of covered product
    * @param _coverAsset id of nexus cover asset
    * @param _coverManager address of cover manager contract
    * @param _depositFee Fee for new deposits
-   * @param _managementFee Fee for managed assets
+   * @param _managementFee Fee for invested assets
    */
   constructor(
     IERC4626 _underlyingVault,
@@ -159,71 +165,184 @@ contract CoveredVault is SafeERC4626, FeeManager {
 
   /* ========== View methods ========== */
 
-  /** @dev See {IERC4626-totalAssets}. */
+  /**
+   * @dev Returns the total amount of the underlying asset that is “managed” by Vault.
+   *
+   * - SHOULD include any compounding that occurs from yield.
+   * - MUST be inclusive of any fees that are charged against assets in the Vault.
+   * - MUST NOT revert.
+   * @return Total amount of underlying assets
+   */
   function totalAssets() public view override returns (uint256) {
     (uint256 totalVaultAssets, ) = _totalAssets(true, true);
     return totalVaultAssets;
   }
 
-  /** @dev See {IERC4626-convertToShares}. */
-  function convertToShares(uint256 assets) public view override returns (uint256 shares) {
-    return _convertToShares(assets, Math.Rounding.Down, false, false);
+  /**
+   * @dev Returns the amount of shares that the Vault would exchange for the amount of assets provided, in an ideal
+   * scenario where all the conditions are met.
+   *
+   * - MUST NOT be inclusive of any fees that are charged against assets in the Vault.
+   * - MUST NOT show any variations depending on the caller.
+   * - MUST NOT reflect slippage or other on-chain conditions, when performing the actual exchange.
+   * - MUST NOT revert.
+   * @param _assets Amount of assets
+   * @return Amount of shares
+   */
+  function convertToShares(uint256 _assets) public view override returns (uint256) {
+    return _convertToShares(_assets, Math.Rounding.Down, false, false);
   }
 
-  /** @dev See {IERC4626-convertToAssets}. */
-  function convertToAssets(uint256 shares) public view override returns (uint256) {
-    (uint256 assets, ) = _convertToAssets(shares, Math.Rounding.Down, false, false);
+  /**
+   * @dev Returns the amount of assets that the Vault would exchange for the amount of shares provided, in an ideal
+   * scenario where all the conditions are met.
+   *
+   * - MUST NOT be inclusive of any fees that are charged against assets in the Vault.
+   * - MUST NOT show any variations depending on the caller.
+   * - MUST NOT reflect slippage or other on-chain conditions, when performing the actual exchange.
+   * - MUST NOT revert.
+   *
+   * @param _shares Amount of shares
+   * @return Amount of assets
+   */
+  function convertToAssets(uint256 _shares) public view override returns (uint256) {
+    (uint256 assets, ) = _convertToAssets(_shares, Math.Rounding.Down, false, false);
     return assets;
   }
 
-  /** @dev See {IERC4626-maxDeposit}. */
-  function maxDeposit(address _receiver) public view virtual override returns (uint256 maxAvailableDeposit) {
-    (maxAvailableDeposit, , ) = _maxDeposit(_receiver);
+  /**
+   * @dev Returns the maximum amount of the underlying asset that can be deposited into the Vault for the receiver,
+   * through a deposit call.
+   *
+   * - MUST return a limited value if receiver is subject to some deposit limit.
+   * - MUST NOT revert.
+   * @param _receiver Address of the receiver
+   * @return Maximum amount of the underlying asset
+   */
+  function maxDeposit(address _receiver) public view virtual override returns (uint256) {
+    (uint256 maxAmount, , ) = _maxDeposit(_receiver);
+
+    return maxAmount;
   }
 
-  /** @dev See {IERC4626-maxMint}. */
-  function maxMint(address _receiver) public view virtual override returns (uint256 maxAvailableMint) {
-    (maxAvailableMint, , ) = _maxMint(_receiver);
+  /**
+   * @dev Returns the maximum amount of the Vault shares that can be minted for the receiver, through a mint call.
+   * - MUST return a limited value if receiver is subject to some mint limit.
+   * - MUST NOT revert.
+   * @param _receiver Address of the receiver
+   * @return Maximum amount of the vault shares
+   */
+  function maxMint(address _receiver) public view virtual override returns (uint256) {
+    (uint256 maxShares, , ) = _maxMint(_receiver);
+
+    return maxShares;
   }
 
-  /** @dev See {IERC4626-previewDeposit}. */
-  function previewDeposit(uint256 assets) public view override returns (uint256) {
-    uint256 fee = _calculateDepositFee(assets);
+  /**
+   * @dev Allows an on-chain or off-chain user to simulate the effects of their deposit at the current block, given
+   * current on-chain conditions.
+   *
+   * - MUST return as close to and no more than the exact amount of Vault shares that would be minted in a deposit
+   *   call in the same transaction. I.e. deposit should return the same or more shares as previewDeposit if called
+   *   in the same transaction.
+   * - MUST NOT account for deposit limits like those returned from maxDeposit and should always act as though the
+   *   deposit would be accepted, regardless if the user has enough tokens approved, etc.
+   * - MUST be inclusive of deposit fees. Integrators should be aware of the existence of deposit fees.
+   * - MUST NOT revert.
+   * @param _assets Amount of assets to deposit
+   * @return Amount of shares
+   */
+  function previewDeposit(uint256 _assets) public view override returns (uint256) {
+    uint256 fee = _calculateDepositFee(_assets);
 
-    return _convertToShares(assets - fee, Math.Rounding.Down, false, true);
+    return _convertToShares(_assets - fee, Math.Rounding.Down, false, true);
   }
 
-  /** @dev See {IERC4626-previewMint}. */
-  function previewMint(uint256 shares) public view override returns (uint256) {
-    uint256 sharesIncludingFee = _calculateAmountIncludingDepositFee(shares);
+  /**
+   * @dev Allows an on-chain or off-chain user to simulate the effects of their mint at the current block, given
+   * current on-chain conditions.
+   *
+   * - MUST return as close to and no fewer than the exact amount of assets that would be deposited in a mint call
+   *   in the same transaction. I.e. mint should return the same or fewer assets as previewMint if called in the
+   *   same transaction.
+   * - MUST NOT account for mint limits like those returned from maxMint and should always act as though the mint
+   *   would be accepted, regardless if the user has enough tokens approved, etc.
+   * - MUST be inclusive of deposit fees. Integrators should be aware of the existence of deposit fees.
+   * - MUST NOT revert.
+   * @param _shares Amount of shares to mint
+   * @return Amount of assets
+   */
+  function previewMint(uint256 _shares) public view override returns (uint256) {
+    uint256 sharesIncludingFee = _calculateAmountIncludingDepositFee(_shares);
 
     (uint256 assets, ) = _convertToAssets(sharesIncludingFee, Math.Rounding.Up, false, true);
 
     return assets;
   }
 
-  /** @dev See {IERC4626-maxWithdraw}. */
-  function maxWithdraw(address owner) public view virtual override returns (uint256) {
-    (uint256 assets, ) = _convertToAssets(balanceOf(owner), Math.Rounding.Down, true, true);
+  /**
+   * @dev Returns the maximum amount of the underlying asset that can be withdrawn from the owner balance in the
+   * Vault, through a withdraw call.
+   *
+   * - MUST return a limited value if owner is subject to some withdrawal limit or timelock.
+   * - MUST NOT revert.
+   * @param _owner Address of the owner
+   * @return Maximum amount of assets
+   */
+  function maxWithdraw(address _owner) public view virtual override returns (uint256) {
+    (uint256 assets, ) = _convertToAssets(balanceOf(_owner), Math.Rounding.Down, true, true);
 
     return assets;
   }
 
-  /** @dev See {IERC4626-previewWithdraw}. */
-  function previewWithdraw(uint256 assets) public view override returns (uint256) {
-    return _convertToShares(assets, Math.Rounding.Up, true, true);
+  /**
+   * @dev Allows an on-chain or off-chain user to simulate the effects of their withdrawal at the current block,
+   * given current on-chain conditions.
+   *
+   * - MUST return as close to and no fewer than the exact amount of Vault shares that would be burned in a withdraw
+   *   call in the same transaction. I.e. withdraw should return the same or fewer shares as previewWithdraw if
+   *   called
+   *   in the same transaction.
+   * - MUST NOT account for withdrawal limits like those returned from maxWithdraw and should always act as though
+   *   the withdrawal would be accepted, regardless if the user has enough shares, etc.
+   * - MUST be inclusive of withdrawal fees. Integrators should be aware of the existence of withdrawal fees.
+   * - MUST NOT revert.
+   * @param _assets Amount of assets
+   * @return Amount of shares
+   */
+  function previewWithdraw(uint256 _assets) public view override returns (uint256) {
+    return _convertToShares(_assets, Math.Rounding.Up, true, true);
   }
 
-  /** @dev See {IERC4626-previewRedeem}. */
-  function previewRedeem(uint256 shares) public view override returns (uint256) {
-    (uint256 assets, ) = _convertToAssets(shares, Math.Rounding.Down, true, true);
+  /**
+   * @dev Allows an on-chain or off-chain user to simulate the effects of their redemption at the current block,
+   * given current on-chain conditions.
+   *
+   * - MUST return as close to and no more than the exact amount of assets that would be withdrawn in a redeem call
+   *   in the same transaction. I.e. redeem should return the same or more assets as previewRedeem if called in the
+   *   same transaction.
+   * - MUST NOT account for redemption limits like those returned from maxRedeem and should always act as though the
+   *   redemption would be accepted, regardless if the user has enough shares, etc.
+   * - MUST be inclusive of withdrawal fees. Integrators should be aware of the existence of withdrawal fees.
+   * - MUST NOT revert.
+   * @param _shares Amount of shares
+   * @return Amount of assets
+   */
+  function previewRedeem(uint256 _shares) public view override returns (uint256) {
+    (uint256 assets, ) = _convertToAssets(_shares, Math.Rounding.Down, true, true);
 
     return assets;
   }
 
   /* ========== User methods ========== */
 
-  /** @dev See {IERC4626-deposit}. */
+  /**
+   * @dev Mints Vault shares to receiver by depositing exactly amount of underlying tokens.
+   * Require pre-approval of the Vault with the Vault’s underlying asset token.
+   * @param _assets Amount of underlying assets
+   * @param _receiver Address of the receiver
+   * @return Amount of minted shares
+   */
   function deposit(uint256 _assets, address _receiver) public override whenNotPaused returns (uint256) {
     (uint256 maxAvailableDeposit, uint256 vaultTotalAssets, uint256 newUVRate) = _maxDeposit(_receiver);
     if (_assets > maxAvailableDeposit) revert CoveredVault__DepositMoreThanMax();
@@ -245,7 +364,13 @@ contract CoveredVault is SafeERC4626, FeeManager {
     return shares;
   }
 
-  /** @dev See {IERC4626-mint}. */
+  /**
+   * @dev Mints exactly Vault shares to receiver by depositing amount of underlying tokens.
+   * Require pre-approval of the Vault with the Vault’s underlying asset token.
+   * @param _shares Amount of shares to mint
+   * @param _receiver Address of the receiver
+   * @return Amount of underlying assets
+   */
   function mint(uint256 _shares, address _receiver) public override whenNotPaused returns (uint256) {
     (uint256 maxAvailableMint, uint256 vaultTotalAssets, uint256 newUVRate) = _maxMint(_receiver);
     if (_shares > maxAvailableMint) revert CoveredVault__MintMoreThanMax();
@@ -269,7 +394,12 @@ contract CoveredVault is SafeERC4626, FeeManager {
     return newVaultAssets;
   }
 
-  /** @dev See {IERC4626-withdraw}. */
+  /**
+   * @dev Burns shares from owner and sends exactly assets of underlying tokens to receiver.
+   * @param _assets Amount of underlying tokens to withdraw
+   * @param _receiver Address of the receiver
+   * @return Amount of burned shares
+   */
   function withdraw(
     uint256 _assets,
     address _receiver,
@@ -290,7 +420,12 @@ contract CoveredVault is SafeERC4626, FeeManager {
     return shares;
   }
 
-  /** @dev See {IERC4626-redeem}. */
+  /**
+   * @dev Burns exactly shares from owner and sends assets of underlying tokens to receiver.
+   * @param _shares Amount of shares to burn
+   * @param _receiver Address of the receiver
+   * @return Amount of underlying assets withdrawn
+   */
   function redeem(uint256 _shares, address _receiver, address _owner) public override whenNotPaused returns (uint256) {
     if (_shares > maxRedeem(_owner)) revert CoveredVault__RedeemMoreThanMax();
 
@@ -357,32 +492,32 @@ contract CoveredVault is SafeERC4626, FeeManager {
 
   /**
    * @dev Allows using the purchased cover to exchange the depegged tokens for the cover asset
-   * @param incidentId Index of the incident in YieldTokenIncidents
-   * @param segmentId Index of the cover's segment that's eligible for redemption
-   * @param depeggedTokens The amount of depegged tokens to be swapped for the cover asset
-   * @param optionalParams extra params
+   * @param _incidentId Index of the incident in YieldTokenIncidents
+   * @param _segmentId Index of the cover's segment that's eligible for redemption
+   * @param _depeggedTokens The amount of depegged tokens to be swapped for the cover asset
+   * @param _optionalParams extra params
    */
   function redeemCover(
-    uint104 incidentId,
-    uint256 segmentId,
-    uint256 depeggedTokens,
-    bytes calldata optionalParams
+    uint104 _incidentId,
+    uint256 _segmentId,
+    uint256 _depeggedTokens,
+    bytes calldata _optionalParams
   ) external {
     address cover = coverManager.cover();
 
     ICover(cover).coverNFT().approve(address(coverManager), coverId);
-    underlyingVault.approve(address(coverManager), depeggedTokens);
+    underlyingVault.approve(address(coverManager), _depeggedTokens);
 
     (uint256 payoutAmount, ) = coverManager.redeemCover(
-      incidentId,
+      _incidentId,
       uint32(coverId),
-      segmentId,
-      depeggedTokens,
+      _segmentId,
+      _depeggedTokens,
       payable(address(this)),
-      optionalParams
+      _optionalParams
     );
 
-    underlyingVaultShares -= depeggedTokens;
+    underlyingVaultShares -= _depeggedTokens;
     idleAssets += payoutAmount;
   }
 
@@ -507,37 +642,42 @@ contract CoveredVault is SafeERC4626, FeeManager {
 
   /**
    * @dev Withdraw/redeem common workflow.
+   * @param _caller Address of the caller
+   * @param _receiver Address of the receiver
+   * @param _owner Address of the shares owner
+   * @param _assets Amount of assets to withdraw
+   * @param _shares Amount of shares to burn
    */
   function _withdraw(
-    address caller,
-    address receiver,
-    address owner,
-    uint256 assets,
-    uint256 shares
+    address _caller,
+    address _receiver,
+    address _owner,
+    uint256 _assets,
+    uint256 _shares
   ) internal override {
-    if (caller != owner) {
-      _spendAllowance(owner, caller, shares);
+    if (_caller != _owner) {
+      _spendAllowance(_owner, _caller, _shares);
     }
 
-    _burn(owner, shares);
+    _burn(_owner, _shares);
 
-    if (assets > idleAssets) {
+    if (_assets > idleAssets) {
       uint256 amountToWithdraw;
 
       unchecked {
-        amountToWithdraw = assets - idleAssets;
+        amountToWithdraw = _assets - idleAssets;
       }
 
       uint256 sharesBurned = underlyingVault.withdraw(amountToWithdraw, address(this), address(this));
       underlyingVaultShares -= sharesBurned;
       idleAssets = 0;
     } else {
-      idleAssets -= assets;
+      idleAssets -= _assets;
     }
 
-    IERC20(asset()).safeTransfer(receiver, assets);
+    IERC20(asset()).safeTransfer(_receiver, _assets);
 
-    emit Withdraw(caller, receiver, owner, assets, shares);
+    emit Withdraw(_caller, _receiver, _owner, _assets, _shares);
   }
 
   /**
@@ -569,7 +709,12 @@ contract CoveredVault is SafeERC4626, FeeManager {
     }
   }
 
-  /** @dev See {IERC4626-maxDeposit}. */
+  /**
+   * @dev Returns the maximum amount of the underlying asset that can be deposited into the Vault
+   * @return Maximum amount of the underlying asset to deposit
+   * @return Total amount of assets managed by the vault
+   * @return The new underlying vault exchange rate
+   */
   function _maxDeposit(address) internal view returns (uint256, uint256, uint256) {
     (uint256 assets, uint256 newUVRate) = _totalAssets(false, true);
     if (assets >= maxAssetsLimit) return (0, assets, newUVRate);
@@ -579,11 +724,17 @@ contract CoveredVault is SafeERC4626, FeeManager {
     }
   }
 
-  /** @dev See {IERC4626-totalAssets}. */
-  function _totalAssets(bool _exact, bool accountForFees) internal view returns (uint256, uint256) {
+  /**
+   * @dev Returns the total assets managed by the vault
+   * @param _exact Whether the exact redeemable amount should be calculated or not
+   * @param _accountForFees Whether management fe should be accounted or not to avoid re-calculating it
+   * @return Total amount of assets managed by the vault
+   * @return The new underlying vault exchange rate
+   */
+  function _totalAssets(bool _exact, bool _accountForFees) internal view returns (uint256, uint256) {
     uint256 _underlyingVaultShares = underlyingVaultShares;
 
-    if (accountForFees) {
+    if (_accountForFees) {
       uint256 fee = _calculateManagementFee(underlyingVaultShares);
 
       _underlyingVaultShares -= fee;
@@ -614,7 +765,13 @@ contract CoveredVault is SafeERC4626, FeeManager {
     return _exact == true ? underlyingVault.previewRedeem(_shares) : underlyingVault.convertToAssets(_shares);
   }
 
-  /** @dev See {IERC4626-maxMint}. */
+  /**
+   * @dev Returns the maximum amount of the Vault shares that can be minted for the receiver
+   * @param _receiver Address of the receiver
+   * @return Maximum amount of the shares to mint
+   * @return Total amount of assets managed by the vault
+   * @return The new underlying vault exchange rate
+   */
   function _maxMint(address _receiver) internal view returns (uint256, uint256, uint256) {
     (uint256 maxAvailableDeposit, uint256 vaultTotalAssets, uint256 newUVRate) = _maxDeposit(_receiver);
     uint256 maxAvailableMint = _convertToShares(maxAvailableDeposit, Math.Rounding.Down, vaultTotalAssets);
@@ -624,65 +781,79 @@ contract CoveredVault is SafeERC4626, FeeManager {
 
   /**
    * @dev Internal conversion function (from assets to shares) with support for rounding direction.
-   *
    * Will revert if assets > 0, totalSupply > 0 and totalAssets = 0. That corresponds to a case where any asset
    * would represent an infinite amount of shares.
+   * @param _assets Amount of assets
+   * @param _rounding Rounding direction
+   * @param _calculatedTotalAssets Total assets managed by the vault
+   * @return The amount of shares
    */
   function _convertToShares(
-    uint256 assets,
-    Math.Rounding rounding,
-    uint256 calculatedTotalAssets
-  ) internal view returns (uint256 shares) {
+    uint256 _assets,
+    Math.Rounding _rounding,
+    uint256 _calculatedTotalAssets
+  ) internal view returns (uint256) {
     uint256 supply = totalSupply();
     return
-      (assets == 0 || supply == 0)
-        ? _initialConvertToShares(assets, rounding)
-        : assets.mulDiv(supply, calculatedTotalAssets, rounding);
+      (_assets == 0 || supply == 0)
+        ? _initialConvertToShares(_assets, _rounding)
+        : _assets.mulDiv(supply, _calculatedTotalAssets, _rounding);
   }
 
   /**
    * @dev Internal conversion function (from assets to shares) with support for rounding direction.
-   *
-   * Will revert if assets > 0, totalSupply > 0 and totalAssets = 0. That corresponds to a case where any asset
-   * would represent an infinite amount of shares.
+   * @param _assets Amount of assets
+   * @param _rounding Rounding direction
+   * @param _exact Whether the exact redeemable amount should be calculated or not
+   * @param _accountForFees Whether management fe should be accounted or not to avoid re-calculating it
+   * @return The amount of shares
    */
   function _convertToShares(
-    uint256 assets,
-    Math.Rounding rounding,
-    bool exact,
-    bool accountForFees
-  ) internal view returns (uint256 shares) {
-    (uint256 totalVaultAssets, ) = _totalAssets(exact, accountForFees);
-    return _convertToShares(assets, rounding, totalVaultAssets);
+    uint256 _assets,
+    Math.Rounding _rounding,
+    bool _exact,
+    bool _accountForFees
+  ) internal view returns (uint256) {
+    (uint256 totalVaultAssets, ) = _totalAssets(_exact, _accountForFees);
+    return _convertToShares(_assets, _rounding, totalVaultAssets);
   }
 
   /**
    * @dev Internal conversion function (from shares to assets) with support for rounding direction.
+   * @param _shares The amount of shares
+   * @param _rounding Rounding direction
+   * @param _calculatedTotalAssets Total assets managed by the vault
+   * @return Amount of assets
    */
   function _convertToAssets(
-    uint256 shares,
-    Math.Rounding rounding,
-    uint256 calculatedTotalAssets
-  ) internal view returns (uint256 assets) {
+    uint256 _shares,
+    Math.Rounding _rounding,
+    uint256 _calculatedTotalAssets
+  ) internal view returns (uint256) {
     uint256 supply = totalSupply();
     return
       (supply == 0)
-        ? _initialConvertToAssets(shares, rounding)
-        : shares.mulDiv(calculatedTotalAssets, supply, rounding);
+        ? _initialConvertToAssets(_shares, _rounding)
+        : _shares.mulDiv(_calculatedTotalAssets, supply, _rounding);
   }
 
   /**
    * @dev Internal conversion function (from shares to assets) with support for rounding direction.
+   * @param _shares The amount of shares
+   * @param _rounding Rounding direction
+   * @param _exact Whether the exact redeemable amount should be calculated or not
+   * @param _accountForFees Whether management fe should be accounted or not to avoid re-calculating it
+   * @return Amount of assets
    */
   function _convertToAssets(
-    uint256 shares,
-    Math.Rounding rounding,
-    bool exact,
-    bool accountForFees
+    uint256 _shares,
+    Math.Rounding _rounding,
+    bool _exact,
+    bool _accountForFees
   ) internal view returns (uint256, uint256) {
-    (uint256 totalVaultAssets, uint256 newUVRate) = _totalAssets(exact, accountForFees);
+    (uint256 totalVaultAssets, uint256 newUVRate) = _totalAssets(_exact, _accountForFees);
 
-    uint256 assets = _convertToAssets(shares, rounding, totalVaultAssets);
+    uint256 assets = _convertToAssets(_shares, _rounding, totalVaultAssets);
 
     return (assets, newUVRate);
   }

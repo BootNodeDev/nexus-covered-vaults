@@ -9,10 +9,14 @@ import { Pausable } from "@openzeppelin/contracts/security/Pausable.sol";
  * @dev Implements roles based access for restricted operations
  */
 contract AccessManager is AccessControlEnumerable, Pausable {
+  /* ========== Constants ========== */
+
   /**
    * @dev Role for botOperator
    */
   bytes32 public constant BOT_ROLE = keccak256("BOT_ROLE");
+
+  /* ========== Modifiers ========== */
 
   /**
    * @dev Validates that the sender is the main admin of the contract or has the required role
@@ -23,6 +27,8 @@ contract AccessManager is AccessControlEnumerable, Pausable {
     _;
   }
 
+  /* ========== Constructor ========== */
+
   /**
    * @dev Initializes the main admin role
    * @param admin the address of the main admin role
@@ -30,6 +36,8 @@ contract AccessManager is AccessControlEnumerable, Pausable {
   constructor(address admin) {
     _setupRole(DEFAULT_ADMIN_ROLE, admin);
   }
+
+  /* ========== Admin methods ========== */
 
   /**
    * @dev Triggers stopped state.
@@ -55,6 +63,8 @@ contract AccessManager is AccessControlEnumerable, Pausable {
   function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
     _unpause();
   }
+
+  /* ========== Internal methods ========== */
 
   /**
    * @dev Validates that the account is the main admin of the contract or has the required role

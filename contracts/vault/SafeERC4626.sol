@@ -19,6 +19,8 @@ abstract contract SafeERC4626 is ERC4626, ERC20Permit {
   error CoveredVault__WithdrawSlippage();
   error CoveredVault__RedeemSlippage();
 
+  /* ========== Constructor ========== */
+
   /**
    * @dev Set the underlying vault contract, name and symbol of the vault.
    * @param _asset Underlying asset
@@ -35,7 +37,9 @@ abstract contract SafeERC4626 is ERC4626, ERC20Permit {
 
   /* ========== View methods ========== */
 
-  /** @dev See {IERC20Metadata-decimals}. */
+  /**
+   * @dev Returns the decimals places of the token.
+   */
   function decimals() public view override(ERC4626, ERC20) returns (uint8) {
     return super.decimals();
   }
