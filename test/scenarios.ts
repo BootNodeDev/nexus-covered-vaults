@@ -124,7 +124,7 @@ describe("scenarios", function () {
       underlyingAsset.address,
     );
     const deppegedTokens = await vault.underlyingVaultShares();
-    await vault.redeemCover(0, 0, deppegedTokens, []);
+    await vault.connect(admin).redeemCover(0, 0, deppegedTokens, []);
 
     // User 1 redeems 1000 shares
     await vault.connect(user1)["redeem(uint256,address,address)"](user1Shares, user1.address, user1.address);
@@ -134,7 +134,6 @@ describe("scenarios", function () {
       expect(user1SharesAfter).to.equal(0);
       expect(user1AssetsAfter).to.equal(user1Amount.mul(9).div(10));
     }
-    console.log("2");
 
     // user 2 withdraw 2000 shares
     await vault.connect(user2)["redeem(uint256,address,address)"](user2Shares, user2.address, user2.address);
@@ -188,6 +187,8 @@ describe("scenarios", function () {
     await underlyingAsset.burn(underlyingVault.address, investedAssets.div(2));
 
     // Redeem can't be done as assets were not covered or Nexus decided not to pay or whatever other situation
+    // Admin needs to remove exchange rate safeguard to allow users to redeem
+    await vault.connect(admin).setUnderlyingVaultRateThreshold(10000); // 100%
 
     // User 1 redeems 1000 shares
     await vault.connect(user1)["redeem(uint256,address,address)"](user1Shares, user1.address, user1.address);

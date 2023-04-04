@@ -4,13 +4,50 @@ import { expect } from "chai";
 import { BigNumber } from "ethers";
 import { ethers } from "hardhat";
 import { deployVaultFixture, mintVaultSharesFixture } from "./utils/fixtures";
+import { daysToSeconds } from "./utils/utils";
 
 const { parseEther } = ethers.utils;
 
 const vaultName = "USDC Covered Vault";
 const vaultSymbol = "cvUSDC";
 
-const daysToSeconds = (days: number) => days * 24 * 60 * 60;
+const poolAlloc = {
+  poolId: 0,
+  skip: false,
+  coverAmountInAsset: ethers.utils.parseEther("10"),
+};
+
+const buyCoverParams = {
+  coverId: 0,
+  owner: ethers.constants.AddressZero, // replace
+  productId: 1,
+  coverAsset: 0,
+  amount: ethers.utils.parseEther("10"),
+  period: 0,
+  maxPremiumInAsset: ethers.utils.parseEther("1"),
+  paymentAsset: ethers.constants.AddressZero, // replace
+  commissionRatio: 0,
+  commissionDestination: ethers.constants.AddressZero,
+  ipfsData: "",
+};
+
+const product = {
+  productType: 1,
+  yieldTokenAddress: ethers.constants.AddressZero,
+  coverAssets: 0,
+  initialPriceRatio: 4,
+  capacityReductionRatio: 1,
+  isDeprecated: false,
+  useFixedPrice: true,
+};
+
+const productParam = {
+  productName: "test",
+  productId: buyCoverParams.productId,
+  ipfsMetadata: buyCoverParams.ipfsData,
+  product,
+  allowedPools: [],
+};
 
 describe("CoveredVault", function () {
   describe("Deployment", function () {
@@ -1420,6 +1457,87 @@ describe("CoveredVault", function () {
       await expect(vault.connect(admin).buyCover(amount, period, amount.div(10), []))
         .to.emit(vault, "CoverBought")
         .withArgs(admin.address, expectedCoverId, amount, period);
+    });
+  });
+
+  describe("redeemCover", function () {
+    it("Should revert if not admin or operator", async function () {
+      const { vault } = await loadFixture(deployVaultFixture);
+
+      const [user1] = await ethers.getSigners();
+
+      const operatorRole = await vault.OPERATOR_ROLE();
+
+      const depeggedTokens = await vault.underlyingVaultShares();
+
+      const incidentId = 1;
+      const segmentId = 0;
+      await expect(vault.connect(user1).redeemCover(incidentId, segmentId, depeggedTokens, [])).to.revertedWith(
+        `AccessControl: account ${user1.address.toLowerCase()} is missing role ${operatorRole}`,
+      );
+    });
+
+    it("Should update idleAssets and UVShares", async function () {
+      const { coverManager, cover, underlyingAsset, underlyingVault, yieldTokenIncidents, vault } = await loadFixture(
+        deployVaultFixture,
+      );
+
+      const [user1, , , admin] = await ethers.getSigners();
+
+      await coverManager.connect(admin).addToAllowList(vault.address);
+
+      const payoutAmount = buyCoverParams.amount;
+      await yieldTokenIncidents
+        .connect(admin)
+        .setPayoutAmount(payoutAmount, underlyingVault.address, underlyingAsset.address);
+
+      const products = [
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+        { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+      ];
+
+      await cover.setProducts(products);
+
+      await coverManager.connect(user1).depositETHOnBehalf(vault.address, { value: buyCoverParams.amount });
+
+      await vault
+        .connect(admin)
+        .buyCover(buyCoverParams.amount, buyCoverParams.period, buyCoverParams.maxPremiumInAsset, [poolAlloc]);
+
+      await underlyingAsset.mint(user1.address, buyCoverParams.amount);
+      await underlyingAsset.connect(user1).approve(vault.address, buyCoverParams.amount);
+      await vault.connect(user1)["deposit(uint256,address)"](buyCoverParams.amount, user1.address);
+
+      await vault.connect(admin).invest(buyCoverParams.amount);
+
+      const underlyingAssetBefore = await underlyingAsset.balanceOf(vault.address);
+      const underlyingVaultBefore = await underlyingVault.balanceOf(vault.address);
+      const idleAssetsBefore = await vault.idleAssets();
+      const underlyingVaultSharesBefore = await vault.underlyingVaultShares();
+      const latestUvRateBefore = await vault.latestUvRate();
+
+      const coverId = await cover.coverId();
+
+      const depeggedTokens = await vault.underlyingVaultShares();
+
+      const incidentId = 1;
+      const segmentId = 0;
+      await expect(vault.connect(admin).redeemCover(incidentId, segmentId, depeggedTokens, []))
+        .to.emit(vault, "CoverRedeemed")
+        .withArgs(admin.address, coverId, incidentId, segmentId, depeggedTokens, payoutAmount);
+
+      const underlyingAssetAfter = await underlyingAsset.balanceOf(vault.address);
+      const underlyingVaultAfter = await underlyingVault.balanceOf(vault.address);
+      const idleAssetsAfter = await vault.idleAssets();
+      const underlyingVaultSharesAfter = await vault.underlyingVaultShares();
+      const latestUvRateAfter = await vault.latestUvRate();
+
+      expect(underlyingAssetAfter).to.be.eq(underlyingAssetBefore.add(depeggedTokens));
+      expect(underlyingVaultAfter).to.be.eq(underlyingVaultBefore.sub(payoutAmount));
+      expect(idleAssetsAfter).to.be.eq(idleAssetsBefore.add(depeggedTokens));
+      expect(underlyingVaultSharesAfter).to.be.eq(underlyingVaultSharesBefore.sub(payoutAmount));
+      expect(latestUvRateBefore).to.not.equal(0);
+      expect(latestUvRateAfter).to.equal(0);
     });
   });
 });
