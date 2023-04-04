@@ -526,7 +526,7 @@ contract CoveredVault is SafeERC4626, FeeManager {
     uint256 _segmentId,
     uint256 _depeggedTokens,
     bytes calldata _optionalParams
-  ) external {
+  ) external onlyAdminOrRole(OPERATOR_ROLE) {
     address cover = coverManager.cover();
 
     ICover(cover).coverNFT().approve(address(coverManager), coverId);
@@ -543,6 +543,9 @@ contract CoveredVault is SafeERC4626, FeeManager {
 
     underlyingVaultShares -= _depeggedTokens;
     idleAssets += payoutAmount;
+
+    // reset last underlying vault exchange rate
+    latestUvRate = 0;
 
     emit CoverRedeemed(msg.sender, coverId, _incidentId, _segmentId, _depeggedTokens, payoutAmount);
   }

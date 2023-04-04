@@ -33,10 +33,57 @@ export async function deployUnderlyingVaultFixture(): VaultFixture {
 
 export const deployVaultFixture = async () => deployVaultFixtureCreator();
 
-async function deployVaultFixtureCreator(depositFee = 0, managementFee = 0) {
+export const deployScenariosFixture = async () => {
+  const [, , , admin] = await ethers.getSigners();
+
+  const { vault, underlyingVault, underlyingAsset, cover, coverNFT, yieldTokenIncidents, coverManager } =
+    await deployVaultFixtureCreator(1);
+
+  const product = {
+    productType: 1,
+    yieldTokenAddress: ethers.constants.AddressZero,
+    coverAssets: 0,
+    initialPriceRatio: 4,
+    capacityReductionRatio: 1,
+    isDeprecated: false,
+    useFixedPrice: true,
+  };
+
+  const productParam = {
+    productName: "test",
+    productId: 1,
+    ipfsMetadata: "",
+    product,
+    allowedPools: [],
+  };
+
+  const products = [
+    { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+    { ...productParam, product: { ...product, yieldTokenAddress: underlyingVault.address } },
+  ];
+
+  await cover.setProducts(products);
+
+  await coverManager.connect(admin).addToAllowList(vault.address);
+
+  const amount = parseEther("10000");
+  await underlyingAsset.mint(admin.address, amount);
+  await underlyingAsset.connect(admin).approve(coverManager.address, amount);
+  await coverManager.connect(admin).depositOnBehalf(underlyingAsset.address, amount, vault.address);
+
+  await underlyingAsset.mint(yieldTokenIncidents.address, amount);
+
+  await vault.connect(admin).setUnderlyingVaultRateThreshold(3000); //30%
+
+  return { vault, underlyingVault, underlyingAsset, cover, coverNFT, yieldTokenIncidents, coverManager };
+};
+
+async function deployVaultFixtureCreator(coverAsset = 0) {
   const { underlyingVault, underlyingAsset } = await deployUnderlyingVaultFixture();
   const { vaultFactory } = await deployVaultFactoryFixture();
   const { coverManager, cover, coverNFT, yieldTokenIncidents } = await deployCoverManager(underlyingAsset);
+  const depositFee = 0;
+  const managementFee = 0;
 
   const [, , , admin] = await ethers.getSigners();
 
@@ -52,7 +99,7 @@ async function deployVaultFixtureCreator(depositFee = 0, managementFee = 0) {
       maxAssetsLimit,
       10000,
       1,
-      0,
+      coverAsset,
       coverManager.address,
       depositFee,
       managementFee,
