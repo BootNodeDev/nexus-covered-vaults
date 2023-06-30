@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
 import { ICover, BuyCoverParams, PoolAllocationRequest, Product, CoverData, ProductParam, CoverSegment, ProductType, ProductInitializationParams } from "./../interfaces/ICover.sol";
