@@ -2,7 +2,7 @@
   "name": "nexus-covered-vaults",
   "version": "1.0.0",
   "repository": "https://github.com/BootNodeDev/nexus-covered-vaults.git",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test test/**.ts",
